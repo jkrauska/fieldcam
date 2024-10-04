@@ -1,0 +1,7 @@
+
+letsencrypt/acme.json
+cam-app/venv
+cam-app/.ruff_cache
+cam-app/app/.ruff_cache
+jobs/jobs.sqlite
+cam-app/app/secrets.json
