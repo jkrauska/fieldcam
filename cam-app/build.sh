@@ -18,6 +18,7 @@ if ! command -v inotifywait &> /dev/null; then
 fi
 
 while true; do
+    echo "waiting for changes"
     inotifywait --recursive --event modify,create,delete \
         --exclude '.*\.jpg$' \
         "$DIRECTORY_TO_WATCH"
@@ -27,4 +28,6 @@ while true; do
     docker build -t camapp .
     docker-compose up -d
     tput bel
+    date
+
 done

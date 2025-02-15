@@ -34,6 +34,7 @@ services:
       - "./cam-app/app/secrets.json:/code/app/secrets.json"  # in case secrets need to change
       - "./cam-app/app/static:/code/app/static"  # field image path (upgrades with cron)
       - "./jobs:/code/jobs" # sqlite db
+      - "./logs:/code/logs" # log files
 
       # statics
     labels:
