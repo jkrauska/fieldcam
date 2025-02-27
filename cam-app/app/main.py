@@ -262,7 +262,7 @@ def new_stream(name="", startTime=False, duration=60 * 5, key="", config={}):
 async def list_jobs(request: Request, user=Depends(login_manager)):
     jobs = sorted(scheduler.get_jobs(), key=lambda x: x.next_run_time)
     return templates.TemplateResponse(
-        "list.html.j2", {"request": request, "jobs": jobs}
+        "list.html.j2", {"request": request, "jobs": jobs, "field_name": SECRETS["LOCATION"]}
     )
 
 
