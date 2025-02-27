@@ -78,10 +78,10 @@ def format_datetime(value, format="%Y-%m-%d %H:%M:%S"):
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["datetime"] = format_datetime
 
-
+# Static files are cached :|
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-@app.get("/dynamic2/field.jpg")
+@app.get("/dynamic/field.jpg")
 def serve_image():
     file_path = "app/static/field.jpg"
     headers = {
