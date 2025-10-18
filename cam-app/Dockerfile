@@ -8,11 +8,12 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Python environment stage: Install Python dependencies using UV
-FROM base-os AS python-env
-
 # Install UV for fast package installation
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+
+# Python environment stage: Install Python dependencies using UV
+FROM base-os AS python-env
 
 # Set working directory
 WORKDIR /code

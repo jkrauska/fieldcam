@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from apscheduler.jobstores.base import ConflictingIdError
 
 from .config import LOCAL_TZ, scheduler
+from .database import cancel_active_stream, cleanup_stale_streams
 from .random_names import generate_name
 from .streaming import stream_game
 
@@ -77,3 +78,36 @@ def remove_job(job_id: str):
         Exception: If job removal fails
     """
     scheduler.remove_job(job_id)
+
+
+def start_cleanup_task():
+    """
+    Start periodic cleanup task to check for dead stream processes.
+
+    Runs every 5 minutes to verify running streams are still active.
+    """
+    try:
+        scheduler.add_job(
+            cleanup_stale_streams,
+            trigger="interval",
+            minutes=5,
+            id="HIDDEN_cleanup_stale_streams",
+            name="HIDDEN_cleanup_stale_streams",
+        )
+        logging.info("Started periodic cleanup task for stale streams")
+    except ConflictingIdError:
+        # Task already exists, which is fine
+        logging.info("Cleanup task already running")
+
+
+def cancel_stream(job_name: str):
+    """
+    Cancel an actively running stream.
+
+    Args:
+        job_name: Name of the stream to cancel
+
+    Returns:
+        True if successfully cancelled, False otherwise
+    """
+    return cancel_active_stream(job_name)
