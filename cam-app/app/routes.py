@@ -10,7 +10,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.templating import Jinja2Templates
 
 from .config import LOCAL_TZ, login_manager, settings
-from .scheduler import get_scheduled_jobs, new_stream, remove_job
+from .database import get_active_streams, get_all_streams
+from .scheduler import cancel_stream, get_scheduled_jobs, new_stream, remove_job
 
 
 def format_datetime(value, format="%Y-%m-%d %H:%M:%S"):
@@ -35,10 +36,27 @@ def serve_field_image():
 
 
 async def list_jobs_page(request: Request, user=Depends(login_manager)):  # noqa: B008
-    """Display the list of scheduled jobs."""
+    """Display the list of scheduled jobs and active streams."""
     jobs = get_scheduled_jobs()
+    active_streams = get_active_streams()
+
+    # Convert UTC timestamps to local timezone for display
+    for stream in active_streams:
+        if stream.start_time:
+            # Parse ISO format UTC timestamp
+            utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
+            # Convert to local timezone
+            local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
+            stream.start_time_local = local_time
+
     return templates.TemplateResponse(
-        "list.html.j2", {"request": request, "jobs": jobs, "field_name": settings.location}
+        "list.html.j2",
+        {
+            "request": request,
+            "jobs": jobs,
+            "active_streams": active_streams,
+            "field_name": settings.location,
+        },
     )
 
 
@@ -123,6 +141,49 @@ async def remove_job_route(request: Request, user=Depends(login_manager)):  # no
         except Exception as e:
             logging.error(f"Error removing job: {e}")
             raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+async def cancel_stream_route(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """Handle canceling an active stream."""
+    logging.info(f"Canceling stream: {request}")
+    form = await request.form()
+    logging.info(f"Form: {form}")
+
+    name = form.get("name") or None
+    if name:
+        try:
+            success = cancel_stream(name)
+            if success:
+                logging.info(f"Successfully cancelled stream: {name}")
+            else:
+                logging.warning(f"Failed to cancel stream: {name}")
+            return RedirectResponse(url="/list", status_code=303)
+        except Exception as e:
+            logging.error(f"Error canceling stream: {e}")
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+async def list_all_streams_page(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """Display complete stream history."""
+    all_streams = get_all_streams()
+
+    # Convert UTC timestamps to local timezone for display
+    for stream in all_streams:
+        if stream.start_time:
+            # Parse ISO format UTC timestamp
+            utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
+            # Convert to local timezone
+            local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
+            stream.start_time_local = local_time
+
+    return templates.TemplateResponse(
+        "list_all.html.j2",
+        {
+            "request": request,
+            "streams": all_streams,
+            "field_name": settings.location,
+        },
+    )
 
 
 def get_version():

@@ -16,14 +16,18 @@ from .auth import (
 )
 
 # Import configuration and setup
+from .database import init_db
 from .routes import (
     add_job_page,
+    cancel_stream_route,
     get_version,
+    list_all_streams_page,
     list_jobs_page,
     remove_job_route,
     serve_field_image,
     submit_job,
 )
+from .scheduler import start_cleanup_task
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +45,15 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Register exception handler
 app.add_exception_handler(HTTPException, http_exception_handler)
+
+
+# Startup event handler
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database and start background tasks on application startup."""
+    init_db()
+    start_cleanup_task()
+    logging.info("Application startup complete - database and cleanup task initialized")
 
 
 # Authentication routes
@@ -71,8 +84,14 @@ def dynamic_field_image():
 
 @app.get("/list", response_class=HTMLResponse)
 async def list_jobs(request: Request, user=None):
-    """Display list of scheduled jobs."""
+    """Display list of scheduled jobs and active streams."""
     return await list_jobs_page(request, user)
+
+
+@app.get("/list_all", response_class=HTMLResponse)
+async def list_all(request: Request, user=None):
+    """Display complete stream history."""
+    return await list_all_streams_page(request, user)
 
 
 @app.get("/add", response_class=HTMLResponse)
@@ -89,6 +108,12 @@ app.post("/submit", response_class=HTMLResponse)(submit_job)
 async def remove_job(request: Request, user=None):
     """Handle job removal."""
     return await remove_job_route(request, user)
+
+
+@app.post("/cancel_stream", response_class=HTMLResponse)
+async def cancel_stream(request: Request, user=None):
+    """Handle canceling an active stream."""
+    return await cancel_stream_route(request, user)
 
 
 @app.get("/version")

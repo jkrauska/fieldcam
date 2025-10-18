@@ -6,6 +6,7 @@ import queue
 import subprocess
 
 from .config import settings
+from .database import add_active_stream, update_stream_status
 
 # Global queue to store FFmpeg output
 ffmpeg_output_queue = queue.Queue()
@@ -81,12 +82,36 @@ def stream_game(duration=(60 * 4), key="", config=None, name=""):
         ffmpeg_command, stderr=subprocess.PIPE, universal_newlines=True, env=ffmpeg_env
     )
 
-    while True:
-        output = process.stderr.readline()
-        if output == "" and process.poll() is not None:
-            break
-        if output:
-            ffmpeg_output_queue.put((name, output.strip()))
+    # Register stream in database immediately after starting
+    try:
+        add_active_stream(job_name=name, pid=process.pid, duration=duration, stream_key=key)
+    except Exception as e:
+        logging.error(f"Failed to register stream in database: {e}")
+        # Continue anyway, but log the error
 
-    return_code = process.poll()
-    return return_code
+    try:
+        # Monitor FFmpeg output
+        while True:
+            output = process.stderr.readline()
+            if output == "" and process.poll() is not None:
+                break
+            if output:
+                ffmpeg_output_queue.put((name, output.strip()))
+
+        return_code = process.poll()
+
+        # Update stream status based on return code
+        if return_code == 0:
+            update_stream_status(name, "completed")
+            logging.info(f"Stream {name} completed successfully")
+        else:
+            update_stream_status(name, "failed", f"FFmpeg exit code: {return_code}")
+            logging.error(f"Stream {name} failed with exit code {return_code}")
+
+        return return_code
+
+    except Exception as e:
+        # Handle any unexpected errors
+        logging.error(f"Error during stream {name}: {e}")
+        update_stream_status(name, "failed", str(e))
+        raise
