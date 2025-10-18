@@ -5,6 +5,6 @@ cam-app/.ruff_cache
 cam-app/app/.ruff_cache
 jobs/jobs.sqlite
 cam-app/app/secrets.json
+cam-app/app/version.json
 logs/*
 cam-app/app/static/field.jpg
-

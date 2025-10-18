@@ -22,6 +22,7 @@ from .routes import (
     add_job_page,
     submit_job,
     remove_job_route,
+    get_version,
 )
 
 # Configure logging
@@ -98,3 +99,9 @@ async def submit(
 async def remove_job(request: Request, user=None):
     """Handle job removal."""
     return await remove_job_route(request, user)
+
+
+@app.get("/version")
+def version():
+    """Return version information about the application build."""
+    return get_version()

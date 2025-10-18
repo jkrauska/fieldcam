@@ -1,9 +1,11 @@
 """Web routes for the fieldcam application."""
 import logging
+import json
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import Request, Response, Depends, HTTPException, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from .config import login_manager, SECRETS, LOCAL_TZ
@@ -123,3 +125,49 @@ async def remove_job_route(request: Request, user=Depends(login_manager)):
         except Exception as e:
             logging.error(f"Error removing job: {e}")
             raise HTTPException(status_code=404, detail=str(e))
+
+
+def get_version():
+    """
+    Return version information including git commit, branch, and build time.
+
+    Returns a JSON response with:
+    - git_commit: Full git commit hash
+    - git_commit_short: Abbreviated 7-character commit hash
+    - git_branch: Git branch name
+    - build_time: ISO 8601 formatted build timestamp
+    """
+    version_file = Path("app/version.json")
+
+    try:
+        if version_file.exists():
+            with open(version_file, "r") as f:
+                version_data = json.load(f)
+
+            # Add short commit hash
+            git_commit = version_data.get("git_commit", "unknown")
+            version_data["git_commit_short"] = git_commit[:7] if git_commit != "unknown" else "unknown"
+
+            return JSONResponse(content=version_data)
+        else:
+            return JSONResponse(
+                content={
+                    "git_commit": "unknown",
+                    "git_commit_short": "unknown",
+                    "git_branch": "unknown",
+                    "build_time": "unknown",
+                    "error": "version.json not found"
+                }
+            )
+    except Exception as e:
+        logging.error(f"Error reading version file: {e}")
+        return JSONResponse(
+            content={
+                "git_commit": "unknown",
+                "git_commit_short": "unknown",
+                "git_branch": "unknown",
+                "build_time": "unknown",
+                "error": str(e)
+            },
+            status_code=500
+        )

@@ -25,7 +25,18 @@ while true; do
 
     echo "Change detected in directory '$DIRECTORY_TO_WATCH'."
 
-    docker build -t camapp .
+    # Capture git information
+    GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+    GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Build with version information
+    docker build \
+        --build-arg GIT_COMMIT="$GIT_COMMIT" \
+        --build-arg GIT_BRANCH="$GIT_BRANCH" \
+        --build-arg BUILD_TIME="$BUILD_TIME" \
+        -t camapp .
+
     docker-compose up -d
     tput bel
     date
