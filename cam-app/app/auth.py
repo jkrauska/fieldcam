@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from fastapi import Request, Response, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from .config import login_manager, SECRETS
+from .config import login_manager, settings
 
 
 def create_redirect_content(next: str, result: str = "unsuccessful") -> str:
@@ -142,7 +142,7 @@ async def handle_login(request: Request, response: Response) -> HTMLResponse:
     next = form.get("next") or "/list"
 
     logging.info("Password check")
-    if password not in SECRETS["PASSWORDS"]:
+    if password not in settings.passwords_list:
         return create_redirect_content(next)
 
     # Redirect to the original page if 'next' is provided

@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # Checks if local code is changed and rebuilds the image if needed.
+# Usage: ./build.sh [now]
+#   now - Force an immediate build before entering the watch loop
 
 DIRECTORY_TO_WATCH="/home/stream411/fieldcam/cam-app/app"
 
@@ -17,13 +19,9 @@ if ! command -v inotifywait &> /dev/null; then
     exit 1
 fi
 
-while true; do
-    echo "waiting for changes"
-    inotifywait --recursive --event modify,create,delete \
-        --exclude '.*\.jpg$' \
-        "$DIRECTORY_TO_WATCH"
-
-    echo "Change detected in directory '$DIRECTORY_TO_WATCH'."
+# Function to build the Docker image
+build_image() {
+    echo "Building Docker image..."
 
     # Capture git information
     GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
@@ -40,5 +38,21 @@ while true; do
     docker-compose up -d
     tput bel
     date
+}
+
+# If "now" argument is provided, build immediately
+if [[ "$1" == "now" ]]; then
+    echo "Forcing immediate build..."
+    build_image
+fi
+
+while true; do
+    echo "waiting for changes"
+    inotifywait --recursive --event modify,create,delete \
+        --exclude '.*\.jpg$' \
+        "$DIRECTORY_TO_WATCH"
+
+    echo "Change detected in directory '$DIRECTORY_TO_WATCH'."
+    build_image
 
 done

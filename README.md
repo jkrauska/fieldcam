@@ -27,16 +27,45 @@ git clone https://github.com/jkrauska/fieldcam.git
 cd fieldcam
 ```
 
-### 2. Configure Secrets
+### 2. Configure Environment Variables
 
-Create a secrets file at `cam-app/app/secrets.json`:
+Copy the example environment file and configure your settings:
 
-```json
-{
-  "secret_key": "your-secret-key-here",
-  "username": "admin",
-  "password": "your-password-here"
-}
+```bash
+cp cam-app/.env.example cam-app/.env
+```
+
+Edit `cam-app/.env` with your configuration:
+
+```bash
+# Security Settings (REQUIRED)
+SECRET_KEY=your-secret-key-here
+COOKIE_NAME=stream411_login
+
+# Camera Configuration (REQUIRED)
+CAM_HOST=192.168.x.x
+CAM_USER=admin
+CAM_PASS=your-camera-password
+
+# Application Settings
+LOCATION=Tepper
+LONG_STRING=your-long-string-here
+
+# Authentication
+AUTH_HASH_SFLL=$2b$12$your-bcrypt-hash-here
+PASSWORDS=password1,password2,password3
+
+# Optional Settings
+TIMEZONE=America/Los_Angeles
+TOKEN_EXPIRY_MINUTES=30
+JOBS_DB_PATH=sqlite:///jobs/jobs.sqlite
+```
+
+**Migration from secrets.json**: If you have an existing `secrets.json` file, you can use the migration script:
+
+```bash
+cd cam-app
+python migrate_to_env.py
 ```
 
 ### 3. Build and Start
@@ -184,13 +213,30 @@ docker build -t camapp:latest .
 
 ### Environment Variables
 
-The application uses the following configuration:
+The application uses Pydantic Settings for configuration management. All configuration is loaded from environment variables (via `.env` file):
+
+**Required Variables:**
+- `SECRET_KEY` - Secret key for session management
+- `CAM_HOST` - Camera IP address
+- `CAM_USER` - Camera username
+- `CAM_PASS` - Camera password
+- `AUTH_HASH_SFLL` - BCrypt hash for authentication
+- `PASSWORDS` - Comma-separated list of valid passwords
+
+**Optional Variables:**
+- `COOKIE_NAME` - Cookie name for sessions (default: `stream411_login`)
+- `LOCATION` - Location name (default: `Tepper`)
+- `TIMEZONE` - Timezone for scheduling (default: `America/Los_Angeles`)
+- `TOKEN_EXPIRY_MINUTES` - Session token expiry (default: `30`)
+- `JOBS_DB_PATH` - SQLite database path (default: `sqlite:///jobs/jobs.sqlite`)
+
+### Docker Configuration
+
 - Port: `9090` (mapped in docker-compose.yml)
-- Secrets file: `cam-app/app/secrets.json`
+- Environment file: `cam-app/.env` (loaded via docker-compose.yml)
 
 ### Docker Volumes
 
-- `./cam-app/app/secrets.json` → `/code/app/secrets.json` - Application secrets
 - `./cam-app/app/static` → `/code/app/static` - Field images
 - `./jobs` → `/code/jobs` - SQLite database
 - `./logs` → `/code/logs` - Application logs
@@ -226,7 +272,24 @@ ffmpeg -i rtsp://USERNAME:PASSWORD@IPADDRESS:554/Streaming/channels/102/ -frames
 
 ### Login Issues
 
-Verify your secrets.json file exists and contains valid credentials.
+Verify your `.env` file exists and contains valid credentials:
+
+```bash
+# Check if .env file exists
+ls -la cam-app/.env
+
+# Verify required variables are set
+grep -E "SECRET_KEY|CAM_HOST|AUTH_HASH_SFLL" cam-app/.env
+```
+
+### Configuration Issues
+
+If you encounter configuration errors:
+
+1. Ensure all required environment variables are set in `cam-app/.env`
+2. Check that the `.env` file is being loaded by docker-compose
+3. Verify the format of environment variables (no quotes needed for most values)
+4. For comma-separated values like `PASSWORDS`, ensure no spaces after commas
 
 ## Future Improvements
 

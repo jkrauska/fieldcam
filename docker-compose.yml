@@ -7,8 +7,9 @@ services:
     restart: always
     ports:
       - "9090:9090"
+    env_file:
+      - "./cam-app/.env"  # Load environment variables from .env file
     volumes:
-      - "./cam-app/app/secrets.json:/code/app/secrets.json"  # in case secrets need to change
       - "./cam-app/app/static:/code/app/static"  # field image path (upgrades with cron)
       - "./jobs:/code/jobs" # sqlite db
       - "./logs:/code/logs" # log files

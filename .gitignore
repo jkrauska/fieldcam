@@ -8,3 +8,7 @@ cam-app/app/secrets.json
 cam-app/app/version.json
 logs/*
 cam-app/app/static/field.jpg
+
+# Environment files (keep .env.example in git)
+.env
+cam-app/.env

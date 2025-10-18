@@ -4,7 +4,7 @@ import os
 import subprocess
 import queue
 
-from .config import SECRETS
+from .config import settings
 
 # Global queue to store FFmpeg output
 ffmpeg_output_queue = queue.Queue()
@@ -12,10 +12,7 @@ ffmpeg_output_queue = queue.Queue()
 
 def input_cam_url(config):
     """Generate the RTSP camera input URL."""
-    CAM_HOST = SECRETS["CAM_HOST"]
-    CAM_USER = SECRETS["CAM_USER"]
-    CAM_PASS = SECRETS["CAM_PASS"]
-    INPUT_CAM = f"rtsp://{CAM_USER}:{CAM_PASS}@{CAM_HOST}:554/Streaming/channels/101/"
+    INPUT_CAM = f"rtsp://{settings.cam_user}:{settings.cam_pass}@{settings.cam_host}:554/Streaming/channels/101/"
     return INPUT_CAM
 
 
