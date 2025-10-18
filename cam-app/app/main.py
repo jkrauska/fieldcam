@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -16,6 +16,7 @@ from .auth import (
 )
 
 # Import configuration and setup
+from .config import login_manager
 from .database import init_db
 from .routes import (
     add_job_page,
@@ -83,19 +84,19 @@ def dynamic_field_image():
 
 
 @app.get("/list", response_class=HTMLResponse)
-async def list_jobs(request: Request, user=None):
+async def list_jobs(request: Request, user=Depends(login_manager)):  # noqa: B008
     """Display list of scheduled jobs and active streams."""
     return await list_jobs_page(request, user)
 
 
 @app.get("/list_all", response_class=HTMLResponse)
-async def list_all(request: Request, user=None):
+async def list_all(request: Request, user=Depends(login_manager)):  # noqa: B008
     """Display complete stream history."""
     return await list_all_streams_page(request, user)
 
 
 @app.get("/add", response_class=HTMLResponse)
-def add(request: Request, user=None):
+def add(request: Request, user=Depends(login_manager)):  # noqa: B008
     """Display add job form."""
     return add_job_page(request, user)
 
@@ -105,13 +106,13 @@ app.post("/submit", response_class=HTMLResponse)(submit_job)
 
 
 @app.post("/remove_job", response_class=HTMLResponse)
-async def remove_job(request: Request, user=None):
+async def remove_job(request: Request, user=Depends(login_manager)):  # noqa: B008
     """Handle job removal."""
     return await remove_job_route(request, user)
 
 
 @app.post("/cancel_stream", response_class=HTMLResponse)
-async def cancel_stream(request: Request, user=None):
+async def cancel_stream(request: Request, user=Depends(login_manager)):  # noqa: B008
     """Handle canceling an active stream."""
     return await cancel_stream_route(request, user)
 
