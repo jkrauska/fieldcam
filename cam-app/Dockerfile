@@ -1,10 +1,15 @@
-# Build stage: Install dependencies using UV
-FROM python:3.11-slim-bullseye AS builder
+# Base OS stage: System dependencies (cached independently)
+FROM python:3.11-slim-bullseye AS base-os
 
-# Build arguments for version information
-ARG GIT_COMMIT=unknown
-ARG GIT_BRANCH=unknown
-ARG BUILD_TIME=unknown
+# Install FFmpeg and other system dependencies
+# This layer will be cached and reused unless the base image changes
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python environment stage: Install Python dependencies using UV
+FROM base-os AS python-env
 
 # Install UV for fast package installation
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -16,25 +21,21 @@ WORKDIR /code
 COPY requirements.txt .
 
 # Install dependencies using UV
+# This layer will be rebuilt only when requirements.txt changes
 RUN uv pip install --system --no-cache -r requirements.txt
 
 # Runtime stage: Create minimal image
-FROM python:3.11-slim-bullseye
+FROM base-os
 
 # Build arguments for version information
 ARG GIT_COMMIT=unknown
 ARG GIT_BRANCH=unknown
 ARG BUILD_TIME=unknown
 
-# Install FFmpeg (needed at runtime)
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy installed Python packages from builder stage
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy installed Python packages from python-env stage
+# This will only rebuild when requirements.txt changes
+COPY --from=python-env /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=python-env /usr/local/bin /usr/local/bin
 
 # Set working directory
 WORKDIR /code

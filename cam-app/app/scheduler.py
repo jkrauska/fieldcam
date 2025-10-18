@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from apscheduler.jobstores.base import ConflictingIdError
 
-from .config import scheduler, LOCAL_TZ, SECRETS
+from .config import scheduler, LOCAL_TZ
 from .streaming import stream_game
 from .random_names import generate_name
 

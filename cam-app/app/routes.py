@@ -8,7 +8,7 @@ from fastapi import Request, Response, Depends, HTTPException, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from .config import login_manager, SECRETS, LOCAL_TZ
+from .config import login_manager, settings, LOCAL_TZ
 from .scheduler import new_stream, get_scheduled_jobs, remove_job
 
 
@@ -37,11 +37,11 @@ async def list_jobs_page(request: Request, user=Depends(login_manager)):
     """Display the list of scheduled jobs."""
     jobs = get_scheduled_jobs()
     return templates.TemplateResponse(
-        "list.html.j2", 
+        "list.html.j2",
         {
-            "request": request, 
-            "jobs": jobs, 
-            "field_name": SECRETS["LOCATION"]
+            "request": request,
+            "jobs": jobs,
+            "field_name": settings.location
         }
     )
 
@@ -103,7 +103,7 @@ async def submit_job(
         startTime=start_datetime_obj,
         duration=calculated_duration_seconds,
         key=streamKey,
-        config=SECRETS,
+        config={},
     )
 
     # Redirect to list page
