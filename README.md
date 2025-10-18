@@ -166,18 +166,90 @@ Access the live field image at `/dynamic/field.jpg` (requires authentication)
 
 ### Local Development Setup
 
+#### Prerequisites
+
+Install [uv](https://github.com/astral-sh/uv) - a fast Python package installer:
+
 ```bash
-# Create a virtual environment
-python -m venv venv
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Reload your shell or add to PATH
+source $HOME/.local/bin/env
+```
+
+#### Setting Up the Development Environment
+
+```bash
+# Navigate to the cam-app directory
+cd cam-app
+
+# Create a virtual environment with uv
+uv venv
+
+# Activate the virtual environment
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r cam-app/requirements.txt
+# Install production dependencies
+uv pip install -r requirements.txt
 
-# Run the application
+# Install development dependencies (includes ruff and pre-commit)
+uv pip install -r requirements-dev.txt
+
+# Install pre-commit hooks (for automatic linting/formatting)
+pre-commit install
+```
+
+#### Running the Application Locally
+
+```bash
+# Make sure you're in the cam-app directory with venv activated
 cd cam-app
 uvicorn app.main:app --reload --port 9090
 ```
+
+### Code Quality Tools
+
+This project uses [Ruff](https://github.com/astral-sh/ruff) for linting and formatting.
+
+#### Automatic Formatting (Pre-commit Hooks)
+
+Once you've run `pre-commit install`, ruff will automatically:
+- Check for linting issues and auto-fix them
+- Format your code
+
+This happens automatically on every commit.
+
+#### Manual Usage
+
+```bash
+# Check for linting issues
+ruff check .
+
+# Auto-fix linting issues
+ruff check --fix .
+
+# Format all Python files
+ruff format .
+
+# Check a specific file
+ruff check cam-app/app/main.py
+```
+
+#### Configuration
+
+Ruff configuration is in `pyproject.toml`:
+- Line length: 100 characters
+- Python version: 3.11
+- Enabled rules: pyflakes, pycodestyle, isort, pep8-naming, pyupgrade, flake8-bugbear, and more
+
+#### Continuous Integration
+
+GitHub Actions automatically runs ruff checks on all pull requests and pushes to main/master branches. The workflow:
+- Checks for linting issues with `ruff check`
+- Verifies code formatting with `ruff format --check`
+
+See `.github/workflows/lint.yml` for the workflow configuration.
 
 ### Technology Stack
 

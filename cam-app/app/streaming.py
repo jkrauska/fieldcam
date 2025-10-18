@@ -1,8 +1,9 @@
 """FFmpeg streaming functionality for the fieldcam application."""
+
 import logging
 import os
-import subprocess
 import queue
+import subprocess
 
 from .config import settings
 
@@ -12,38 +13,41 @@ ffmpeg_output_queue = queue.Queue()
 
 def input_cam_url(config):
     """Generate the RTSP camera input URL."""
-    INPUT_CAM = f"rtsp://{settings.cam_user}:{settings.cam_pass}@{settings.cam_host}:554/Streaming/channels/101/"
-    return INPUT_CAM
+    input_cam = f"rtsp://{settings.cam_user}:{settings.cam_pass}@{settings.cam_host}:554/Streaming/channels/101/"
+    return input_cam
 
 
-def stream_game(duration=(60 * 4), key="", config={}, name=""):
+def stream_game(duration=(60 * 4), key="", config=None, name=""):
     """
     Stream a game from the camera to GameChanger.
-    
+
     Args:
         duration: Duration in seconds for the stream
         key: GameChanger stream key
         config: Configuration dictionary (not currently used)
         name: Name of the stream for logging purposes
-        
+
     Returns:
         Return code from FFmpeg process
     """
+    if config is None:
+        config = {}
+
     logging.info("Starting a stream...")
     pretty_name = name.replace(" ", "_")
     duration = int(duration)
 
-    INPUT_CAM = input_cam_url(config)
+    input_cam = input_cam_url(config)
 
     # Game Changer Settings
-    GC_BASE = "rtmps://601c62c19c9e.global-contribute.live-video.net:443/app"
+    gc_base = "rtmps://601c62c19c9e.global-contribute.live-video.net:443/app"
     if key == "":
         logging.error("No Destination GC Key Given")
         return
-    OUTPUT_GC1 = f"{GC_BASE}/{key}"
+    output_gc1 = f"{gc_base}/{key}"
 
-    FFMPEG_ENV = os.environ.copy()
-    FFMPEG_ENV["FFREPORT"] = f"level=32:file=logs/%p-%t-{pretty_name}.log"
+    ffmpeg_env = os.environ.copy()
+    ffmpeg_env["FFREPORT"] = f"level=32:file=logs/%p-%t-{pretty_name}.log"
 
     ffmpeg_command = [
         "/usr/bin/ffmpeg",
@@ -55,7 +59,7 @@ def stream_game(duration=(60 * 4), key="", config={}, name=""):
         "-rtsp_transport",
         "tcp",  # RTSP Options
         "-i",
-        INPUT_CAM,  # Input
+        input_cam,  # Input
         "-c:v",
         "copy",
         "-bufsize",
@@ -70,11 +74,11 @@ def stream_game(duration=(60 * 4), key="", config={}, name=""):
         str(duration),  # Duration
         "-f",
         "flv",
-        OUTPUT_GC1,  # Output
+        output_gc1,  # Output
     ]
 
     process = subprocess.Popen(
-        ffmpeg_command, stderr=subprocess.PIPE, universal_newlines=True, env=FFMPEG_ENV
+        ffmpeg_command, stderr=subprocess.PIPE, universal_newlines=True, env=ffmpeg_env
     )
 
     while True:

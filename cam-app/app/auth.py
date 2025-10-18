@@ -1,9 +1,9 @@
 """Authentication routes and handlers for the fieldcam application."""
+
 import logging
-from typing import Optional
 from urllib.parse import urlencode
 
-from fastapi import Request, Response, HTTPException, status
+from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .config import login_manager, settings
@@ -31,7 +31,7 @@ def load_user(user_id: str):
     return None
 
 
-def get_login_form(next: Optional[str] = None) -> HTMLResponse:
+def get_login_form(next: str | None = None) -> HTMLResponse:
     """Generate the login form HTML."""
     next_input = f'<input type="hidden" name="next" value="{next}" />' if next else ""
     return HTMLResponse(f"""

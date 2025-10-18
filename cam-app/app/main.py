@@ -1,13 +1,11 @@
 """Main entry point for the fieldcam application."""
+
 import logging
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-
-# Import configuration and setup
-from .config import login_manager
 
 # Import route handlers
 from .auth import (
@@ -16,13 +14,15 @@ from .auth import (
     handle_logout,
     http_exception_handler,
 )
+
+# Import configuration and setup
 from .routes import (
-    serve_field_image,
-    list_jobs_page,
     add_job_page,
-    submit_job,
-    remove_job_route,
     get_version,
+    list_jobs_page,
+    remove_job_route,
+    serve_field_image,
+    submit_job,
 )
 
 # Configure logging
@@ -81,18 +81,8 @@ def add(request: Request, user=None):
     return add_job_page(request, user)
 
 
-@app.post("/submit", response_class=HTMLResponse)
-async def submit(
-    request: Request,
-    teamName: str = None,
-    date: str = None,
-    startTime: str = None,
-    endTime: str = None,
-    streamKey: str = None,
-    user=None,
-):
-    """Handle job submission."""
-    return await submit_job(teamName, date, startTime, endTime, streamKey, user)
+# Use the submit_job function directly from routes.py
+app.post("/submit", response_class=HTMLResponse)(submit_job)
 
 
 @app.post("/remove_job", response_class=HTMLResponse)

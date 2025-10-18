@@ -1,13 +1,13 @@
 """Configuration management for the fieldcam application."""
-from datetime import timedelta
-from typing import List
-from zoneinfo import ZoneInfo
-import atexit
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from fastapi_login import LoginManager
-from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
+from datetime import timedelta
+from zoneinfo import ZoneInfo
+
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi_login import LoginManager
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -41,11 +41,11 @@ class Settings(BaseSettings):
         case_sensitive=False,
         # Map environment variables to fields
         env_prefix="",
-        extra="ignore"
+        extra="ignore",
     )
 
     @property
-    def passwords_list(self) -> List[str]:
+    def passwords_list(self) -> list[str]:
         """Return passwords as a list."""
         if not self.passwords:
             return []
