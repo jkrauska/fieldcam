@@ -1,9 +1,0 @@
-apscheduler
-fastapi-login
-fastapi-proxiedheadersmiddleware
-fastapi[standard]
-jinja2
-pydantic-settings
-python-multipart
-sqlalchemy
-uvicorn[standard]

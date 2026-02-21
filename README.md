@@ -111,8 +111,8 @@ fieldcam/
 │   │   ├── static/          # Static files (images, favicon)
 │   │   └── templates/       # Jinja2 templates
 │   ├── Dockerfile           # Container definition
-│   ├── requirements.txt     # Python dependencies
-│   └── build.sh            # Docker build script
+│   ├── pyproject.toml       # Project config and Python dependencies (uv)
+│   └── build.sh             # Docker build script
 ├── jobs/                    # SQLite database storage
 ├── logs/                    # Application logs
 ├── docker-compose.yml       # Docker Compose configuration
@@ -184,17 +184,11 @@ source $HOME/.local/bin/env
 # Navigate to the cam-app directory
 cd cam-app
 
-# Create a virtual environment with uv
-uv venv
+# Create a virtual environment and install all dependencies (prod + dev) with uv
+uv sync --all-extras
 
-# Activate the virtual environment
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install production dependencies
-uv pip install -r requirements.txt
-
-# Install development dependencies (includes ruff and pre-commit)
-uv pip install -r requirements-dev.txt
+# Activate the virtual environment (optional; uv run uses it automatically)
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install pre-commit hooks (for automatic linting/formatting)
 pre-commit install
@@ -203,9 +197,9 @@ pre-commit install
 #### Running the Application Locally
 
 ```bash
-# Make sure you're in the cam-app directory with venv activated
+# From the cam-app directory (uv uses .venv from pyproject.toml)
 cd cam-app
-uvicorn app.main:app --reload --port 9090
+uv run uvicorn app.main:app --reload --port 9090
 ```
 
 ### Code Quality Tools

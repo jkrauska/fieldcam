@@ -1,0 +1,23 @@
+[project]
+name = "fieldcam"
+version = "0.1.0"
+description = "Web app for scheduling and managing live camera streams for ball field events"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "apscheduler",
+    "fastapi-login",
+    "fastapi-proxiedheadersmiddleware",
+    "fastapi[standard]",
+    "jinja2",
+    "pydantic-settings",
+    "python-multipart",
+    "sqlalchemy",
+    "uvicorn[standard]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pre-commit",
+]
