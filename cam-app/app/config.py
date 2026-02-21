@@ -1,13 +1,28 @@
 """Configuration management for the fieldcam application."""
 
 import atexit
+import os
 from datetime import timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi_login import LoginManager
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Resolve .env relative to project root (cam-app), so it works regardless of CWD
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_ENV_FILE = _PROJECT_ROOT / ".env"
+# Only pass env_file if it exists (avoid errors when .env is missing)
+_SETTINGS_KW: dict = {
+    "env_file_encoding": "utf-8",
+    "case_sensitive": False,
+    "env_prefix": "",
+    "extra": "ignore",
+}
+if _ENV_FILE.is_file():
+    _SETTINGS_KW["env_file"] = _ENV_FILE
 
 
 class Settings(BaseSettings):
@@ -35,14 +50,7 @@ class Settings(BaseSettings):
     token_expiry_minutes: int = 30
     jobs_db_path: str = "sqlite:///jobs/jobs.sqlite"
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        # Map environment variables to fields
-        env_prefix="",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(**_SETTINGS_KW)
 
     @property
     def passwords_list(self) -> list[str]:
@@ -54,6 +62,22 @@ class Settings(BaseSettings):
 
 # Initialize settings
 settings = Settings()
+
+
+def _resolve_jobs_db_url(url: str) -> str:
+    """Resolve relative SQLite paths against project root and ensure directory exists."""
+    if not url.startswith("sqlite:///"):
+        return url
+    path_part = url.replace("sqlite:///", "")
+    if os.path.isabs(path_part):
+        return url
+    full_path = _PROJECT_ROOT / path_part
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    return f"sqlite:///{full_path}"
+
+
+# Resolved DB URL so jobs/ exists under project root when path is relative
+JOBS_DB_URL = _resolve_jobs_db_url(settings.jobs_db_path)
 
 # Timezone configuration
 LOCAL_TZ = ZoneInfo(settings.timezone)
@@ -68,8 +92,8 @@ login_manager = LoginManager(
     default_expiry=timedelta(minutes=settings.token_expiry_minutes),
 )
 
-# Configure APScheduler with SQLite job store
-jobstores = {"default": SQLAlchemyJobStore(url=settings.jobs_db_path)}
+# Configure APScheduler with SQLite job store (use resolved path)
+jobstores = {"default": SQLAlchemyJobStore(url=JOBS_DB_URL)}
 scheduler = BackgroundScheduler(jobstores=jobstores)
 scheduler.start()
 

@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from .config import settings
+from .config import JOBS_DB_URL
 
 Base = declarative_base()
 
@@ -30,10 +30,8 @@ class ActiveStream(Base):
     updated_at = Column(String, default=datetime.utcnow().isoformat())
 
 
-# Create engine and session
-# Use the same database path as APScheduler
-db_path = settings.jobs_db_path.replace("sqlite:///", "")
-engine = create_engine(f"sqlite:///{db_path}")
+# Create engine and session (same resolved path as APScheduler in config)
+engine = create_engine(JOBS_DB_URL)
 SessionLocal = sessionmaker(bind=engine)
 
 
