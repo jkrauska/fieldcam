@@ -259,7 +259,17 @@ See `.github/workflows/lint.yml` for the workflow configuration.
 - **SQLAlchemy** - Database ORM
 - **Jinja2** - Template engine
 - **FastAPI-Login** - Authentication
+- **Data-Star** - Lightweight hypermedia frontend (CDN script, no npm); backend-driven UI with HTML patch responses
 - **Docker** - Containerization
+
+### Data-Star integration
+
+The list and add pages use [Data-Star](https://data-star.dev/) so that actions (remove job, cancel stream, submit new stream) update the page via **HTML morphing** instead of full reloads:
+
+- **List page** (`/list`): Remove and Cancel buttons submit via `@post(..., {contentType: 'form'})`. The server returns an HTML fragment for `#list-content`, which Data-Star morphs into the DOM.
+- **Add page** (`/add`): The form uses `data-on:submit="@post('/submit', {contentType: 'form'})"`. On success the server returns a fragment for `#add-form-container` (success message + link back to list).
+
+No frontend build step or Data-Star SDK is required; the client loads the Data-Star script from the CDN, and the backend returns plain HTML fragments with the expected element IDs.
 
 ### Building the Docker Image
 

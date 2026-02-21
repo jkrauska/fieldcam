@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from .config import LOCAL_TZ, login_manager, settings
@@ -35,28 +35,37 @@ def serve_field_image():
     return FileResponse(file_path, media_type="image/jpeg", headers=headers)
 
 
-async def list_jobs_page(request: Request, user=Depends(login_manager)):  # noqa: B008
-    """Display the list of scheduled jobs and active streams."""
+def _list_context(request: Request):
+    """Build context for list page / list-content fragment (jobs, active_streams, field_name)."""
     jobs = get_scheduled_jobs()
     active_streams = get_active_streams()
-
-    # Convert UTC timestamps to local timezone for display
     for stream in active_streams:
         if stream.start_time:
-            # Parse ISO format UTC timestamp
             utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
-            # Convert to local timezone
             local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
             stream.start_time_local = local_time
+    return {
+        "request": request,
+        "jobs": jobs,
+        "active_streams": active_streams,
+        "field_name": settings.location,
+    }
 
+
+def _render_list_content_fragment(request: Request):
+    """Render the list-content fragment for Data-Star patch (single div#list-content)."""
+    ctx = _list_context(request)
+    content = templates.env.get_template("_list_content.html.j2").render(**ctx)
+    return f'<div id="list-content">\n{content}\n</div>'
+
+
+async def list_jobs_page(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """Display the list of scheduled jobs and active streams."""
+    ctx = _list_context(request)
+    ctx["request"] = request
     return templates.TemplateResponse(
         "list.html.j2",
-        {
-            "request": request,
-            "jobs": jobs,
-            "active_streams": active_streams,
-            "field_name": settings.location,
-        },
+        ctx,
     )
 
 
@@ -119,16 +128,18 @@ async def submit_job(
         config={},
     )
 
-    # Redirect to list page
+    # Data-Star: return fragment to patch add-form-container; fallback for non-JS is same fragment as full response
     html_content = (
-        "<html><body><p>Successful. Redirecting...</p>"
-        '<script>window.location.href = "/list";</script></body></html>'
+        '<div id="add-form-container">'
+        '<p class="alert alert-success">Stream scheduled successfully.</p>'
+        '<p><a href="/list" class="btn btn-primary">Back to list</a></p>'
+        "</div>"
     )
     return HTMLResponse(content=html_content)
 
 
 async def remove_job_route(request: Request, user=Depends(login_manager)):  # noqa: B008
-    """Handle job removal."""
+    """Handle job removal. Returns HTML fragment for Data-Star to morph into #list-content."""
     logging.info(f"Removing job: {request}")
     form = await request.form()
     logging.info(f"Form: {form}")
@@ -137,14 +148,15 @@ async def remove_job_route(request: Request, user=Depends(login_manager)):  # no
     if name:
         try:
             remove_job(name)
-            return RedirectResponse(url="/list", status_code=303)
+            html = _render_list_content_fragment(request)
+            return HTMLResponse(content=html)
         except Exception as e:
             logging.error(f"Error removing job: {e}")
             raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 async def cancel_stream_route(request: Request, user=Depends(login_manager)):  # noqa: B008
-    """Handle canceling an active stream."""
+    """Handle canceling an active stream. Returns HTML fragment for Data-Star to morph into #list-content."""
     logging.info(f"Canceling stream: {request}")
     form = await request.form()
     logging.info(f"Form: {form}")
@@ -157,7 +169,8 @@ async def cancel_stream_route(request: Request, user=Depends(login_manager)):  #
                 logging.info(f"Successfully cancelled stream: {name}")
             else:
                 logging.warning(f"Failed to cancel stream: {name}")
-            return RedirectResponse(url="/list", status_code=303)
+            html = _render_list_content_fragment(request)
+            return HTMLResponse(content=html)
         except Exception as e:
             logging.error(f"Error canceling stream: {e}")
             raise HTTPException(status_code=500, detail=str(e)) from e

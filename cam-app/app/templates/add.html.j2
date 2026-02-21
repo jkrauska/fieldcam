@@ -15,14 +15,14 @@
 </head>
 
 <body>
-    <div class="container mt-5">
+    <div class="container mt-5" id="add-form-container">
         <h2>Schedule A New Stream</h2>
 
         <h4><b>WARNING:</b> Spring 2025</h4>
         <h4>Majors Diamondbacks are on <b>STREAM BLACKOUT</b>.</h4>
         <h4>DO NOT STREAM their games.</h4>
 
-        <form action="./submit" method="POST">
+        <form action="./submit" method="POST" data-on:submit="@post('/submit', {contentType: 'form'})">
             <div class="mb-3">
                 <label for="text-input" class="form-label"><b>Team:</b> (example: Majors Cubs)</label>
                 <input type="text" class="form-control" id="text-input" name="teamName" required>
@@ -60,6 +60,7 @@
             to Get Your Stream Key</a>
     </div>
 
+    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js"></script>
 
     <!-- Auto set endtime-->
     <script>
