@@ -1,0 +1,12 @@
+---
+description: Project conventions (uv, datastar/SPA, auth)
+alwaysApply: true
+---
+
+# Project conventions
+
+- **uv only:** Use `uv run`, `uv add`, `uv sync` for Python. No bare `python` or `pip`.
+- **Datastar and SPA:** Prefer partial fragments and the existing SPA shell/router; use `datastar-selector` / `datastar-mode` for responses. Avoid full-page reloads when SPA fits.
+- **Auth:** Protect any user-facing or mutation route with `user=Depends(login_manager)` from `app.config`. Do not add endpoints without this when login is required.
+
+See [AGENTS.md](AGENTS.md) for full context.

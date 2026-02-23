@@ -1,0 +1,85 @@
+<style>
+.btn-check:not(:checked) + .btn img { filter: grayscale(1); opacity: 0.4; }
+.dest-group .btn { flex: 1 1 0; }
+form .col-form-label { width: 8.5rem; flex: 0 0 auto; }
+</style>
+<p class="mb-2"><strong>Spring 2026 Blackout Teams (DO NOT STREAM):</strong></p>
+<ul class="mb-3"><li>TBD</li></ul>
+
+<form data-signals:add-dest="'gamechanger'" onsubmit="event.preventDefault()">
+    <div class="row mb-2 align-items-center">
+        <label for="add-teamName" class="col-auto col-form-label"><b>Stream Name:</b></label>
+        <div class="col">
+            <input type="text" class="form-control" id="add-teamName" name="teamName" placeholder="Majors Cardinals @ Giants" required>
+        </div>
+    </div>
+    <div class="row mb-2 align-items-center">
+        <label for="add-date" class="col-auto col-form-label"><b>Date:</b></label>
+        <div class="col">
+            <input type="date" class="form-control" id="add-date" name="date" value="{{ default_date }}" required>
+        </div>
+    </div>
+    <div class="row mb-2 align-items-center">
+        <label for="add-startTime" class="col-auto col-form-label"><b>Start Time:</b></label>
+        <div class="col">
+            <input type="time" class="form-control" id="add-startTime" name="startTime" value="{{ default_time }}" required>
+        </div>
+    </div>
+    <div class="row mb-2 align-items-center">
+        <label class="col-auto col-form-label"><b>Duration:</b></label>
+        <div class="col d-flex gap-2 align-items-center">
+            <select class="form-select" name="durationHours" id="add-durationHours" style="width: auto;">
+                {% for h in range(0, 7) %}
+                <option value="{{ h }}" {{ 'selected' if h == 2 }}>{{ h }}H</option>
+                {% endfor %}
+            </select>
+            <select class="form-select" name="durationMinutes" id="add-durationMinutes" style="width: auto;">
+                {% for m in range(0, 60, 5) %}
+                <option value="{{ m }}" {{ 'selected' if m == 30 }}>{{ '%02d' | format(m) }}m</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label"><b>Destination:</b></label>
+        <div class="btn-group w-100 dest-group" role="group">
+            <input type="radio" class="btn-check" name="destination" id="add-dest-gc" value="gamechanger" checked autocomplete="off"
+                data-on:change="$addDest = 'gamechanger'">
+            <label class="btn btn-outline-dark" for="add-dest-gc">
+                <img src="https://assets-global.website-files.com/60abbc75a1386aee71517203/61b8f942b53d396ccb93984e_Rebrand-app-icon.svg"
+                    alt="GC" style="height: 20px; background: #000; border-radius: 4px; padding: 2px;">
+            </label>
+            <input type="radio" class="btn-check" name="destination" id="add-dest-yt" value="youtube" autocomplete="off"
+                data-on:change="$addDest = 'youtube'">
+            <label class="btn btn-outline-danger" for="add-dest-yt">
+                <i class="bi bi-youtube"></i> YouTube
+            </label>
+            <input type="radio" class="btn-check" name="destination" id="add-dest-custom" value="custom" autocomplete="off"
+                data-on:change="$addDest = 'custom'">
+            <label class="btn btn-outline-primary" for="add-dest-custom">
+                <i class="bi bi-broadcast"></i> Custom
+            </label>
+        </div>
+    </div>
+    <div class="mb-3" data-show="$addDest === 'youtube'" style="display:none">
+        <label class="form-label"><b>Stream URL:</b></label>
+        <input type="text" class="form-control bg-light" value="rtmp://a.rtmp.youtube.com/live2" readonly>
+    </div>
+    <div class="mb-3" data-show="$addDest === 'custom'" style="display:none">
+        <label for="add-customUrl" class="form-label"><b>Custom RTMP URL:</b></label>
+        <input type="text" class="form-control" id="add-customUrl" name="customUrl" placeholder="rtmp://your-server/path">
+    </div>
+    <div class="mb-3">
+        <label for="add-streamKey" class="form-label"><b>Stream Key:</b></label>
+        <input type="text" class="form-control" id="add-streamKey" name="streamKey" required
+            data-attr-placeholder="$addDest === 'youtube' ? 'as122-er2w-xxxx...' : 'sk_us-east-1_...'"
+            placeholder="sk_us-east-1_...">
+        <div class="form-text" data-show="$addDest === 'youtube'" style="display:none">
+            Get your key from YouTube Studio &rarr; Go Live &rarr; Stream settings
+        </div>
+        <div class="form-text" data-show="$addDest === 'gamechanger'" style="display:none">
+            <a href="https://teammanager.zendesk.com/hc/en-us/articles/360060555011-Live-Streaming-From-An-External-Camera">How to Get Your GC Stream Key</a>
+        </div>
+    </div>
+    <button type="button" class="btn btn-primary" data-on:click="if(el.closest('form').reportValidity()){@post('/submit', {contentType: 'form'}); $showScheduleModal = false}"><i class="bi bi-plus-circle-fill" style="color: white; font-size: 1rem;"></i> Submit This Stream</button>
+</form>

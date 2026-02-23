@@ -91,8 +91,10 @@ crontab -e
 Add this line (adjust credentials and IP address):
 
 ```cron
-* * * * * /usr/bin/ffmpeg -hide_banner -loglevel error -y -i rtsp://USERNAME:PASSWORD@IPADDRESS:554/Streaming/channels/102/ -frames:v 1 -q:v 2 /home/stream411/fieldcam/cam-app/app/static/field.jpg
+* * * * * /usr/bin/ffmpeg -hide_banner -loglevel error -y -i rtsp://USERNAME:PASSWORD@IPADDRESS:554/Streaming/channels/102/ -frames:v 1 -q:v 2 /tmp/field.jpg
 ```
+
+The app serves this file at `/dynamic/field.jpg` (configurable via `field_image_path`, default `/tmp/field.jpg`). Using `/tmp` lets the cron job write the image where any user can read it.
 
 ## Project Structure
 

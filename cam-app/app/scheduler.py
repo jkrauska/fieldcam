@@ -11,7 +11,10 @@ from .random_names import generate_name
 from .streaming import stream_game
 
 
-def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
+def new_stream(
+    name="", start_time=False, duration=60 * 5, key="", config=None,
+    destination="gamechanger", custom_url="",
+):
     """
     Schedule a new stream job.
 
@@ -19,8 +22,10 @@ def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
         name: Name for the stream job (auto-generated if not provided)
         start_time: When to start the stream (defaults to far future)
         duration: Duration in seconds (default 5 minutes)
-        key: GameChanger stream key
+        key: Stream key for the destination service
         config: Configuration dictionary
+        destination: Target service — "gamechanger", "youtube", or "custom"
+        custom_url: Full RTMP base URL when destination is "custom"
 
     Returns:
         The name of the scheduled job
@@ -28,7 +33,7 @@ def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
     if config is None:
         config = {}
 
-    logging.info(f"New Stream: {name} {start_time} {duration} {key}")
+    logging.info(f"New Stream: {name} {start_time} {duration} {key} -> {destination}")
     now = datetime.now().astimezone(LOCAL_TZ)
 
     if not name:
@@ -38,7 +43,6 @@ def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
 
     end_time = start_time + timedelta(seconds=duration)
 
-    # In Progress - adjust if stream should already be running
     if start_time < now and end_time > now:
         start_time = now + timedelta(seconds=2)
         new_duration = end_time - now
@@ -47,6 +51,16 @@ def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
     if not key:
         key = "sk_us-east-1_fakefake"
 
+    kwargs = {
+        "duration": duration,
+        "key": key,
+        "config": config,
+        "name": name,
+        "destination": destination,
+    }
+    if destination == "custom" and custom_url:
+        kwargs["custom_url"] = custom_url
+
     try:
         scheduler.add_job(
             stream_game,
@@ -54,7 +68,7 @@ def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
             run_date=start_time,
             id=name,
             name=name,
-            kwargs={"duration": duration, "key": key, "config": config, "name": name},
+            kwargs=kwargs,
         )
     except ConflictingIdError:
         logging.info(f"Job '{name}' Already Seen")

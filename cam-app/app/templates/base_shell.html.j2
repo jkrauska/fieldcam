@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>{{ page_title | default('Live Stream') }}</title>
+    <style>
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+        button:hover i,
+        button:focus i {
+            color: darkred;
+        }
+        .image-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+        .image-text {
+            position: absolute;
+            color: white;
+            font-size: 36px;
+            text-align: center;
+        }
+        .image-container img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .status-running { background-color: #dc3545; color: white; }
+        .status-completed { background-color: #28a745; color: white; }
+        .status-failed { background-color: #ffc107; color: black; }
+        .status-cancelled { background-color: #6c757d; color: white; }
+        .required:after { content: " *"; color: red; }
+        @keyframes toast-fade { 0%,70% { opacity:1 } 100% { opacity:0; visibility:hidden } }
+    </style>
+</head>
+
+<body data-signals:show-schedule-modal="false" data-signals:show-history-modal="false">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">FieldCam</a>
+            {% if user %}
+            <div class="navbar-nav">
+                <a class="nav-link" href="#" role="button" data-on:click="evt.preventDefault(); $showScheduleModal = true">Schedule</a>
+                <a class="nav-link" href="#" role="button" data-on:click="evt.preventDefault(); $showHistoryModal = true; @get('/fragment/history')">History</a>
+            </div>
+            <div class="navbar-nav ms-auto align-items-center">
+                <a href="/logout" class="btn btn-outline-light btn-sm py-1 px-2" title="Log out" aria-label="Log out">
+                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <div id="toast-area" class="position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 1090"></div>
+
+    <main id="app-content">
+        {{ page_content | safe }}
+    </main>
+
+    <!-- Schedule modal: Datastar signal-driven -->
+    <div class="modal-backdrop" style="opacity:0.5; display:none" data-show="$showScheduleModal" data-on:click="$showScheduleModal = false"></div>
+    <div id="schedule-modal" class="modal" data-class:d-block="$showScheduleModal"
+         data-on:click="if(event.target===el) $showScheduleModal = false"
+         data-on:keydown.escape.window="$showScheduleModal = false">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addModalTitle">Schedule A New Stream</h5>
+                    <button type="button" class="btn-close" aria-label="Close" data-on:click="$showScheduleModal = false"></button>
+                </div>
+                <div class="modal-body" id="add-form-container">
+                    {% include "_add_form_body.html.j2" %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History modal -->
+    <div class="modal-backdrop" style="opacity:0.5; display:none" data-show="$showHistoryModal" data-on:click="$showHistoryModal = false"></div>
+    <div id="history-modal" class="modal" data-class:d-block="$showHistoryModal"
+         data-on:click="if(event.target===el) $showHistoryModal = false"
+         data-on:keydown.escape.window="$showHistoryModal = false">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-clock-history"></i> Stream History</h5>
+                    <button type="button" class="btn-close" aria-label="Close" data-on:click="$showHistoryModal = false"></button>
+                </div>
+                <div class="modal-body" id="history-modal-body">
+                    <div class="text-center py-4"><div class="spinner-border text-secondary" role="status"><span class="visually-hidden">Loading…</span></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js"></script>
+
+    <script>
+        function copyToClipboard(text, element) {
+            navigator.clipboard.writeText(text).then(function () {
+                var originalText = element.innerText;
+                element.innerText = "Copied!";
+                setTimeout(function () { element.innerText = originalText; }, 2000);
+            }).catch(function (err) { console.error("Failed to copy text: ", err); });
+        }
+
+        function convertLocalTimes(root) {
+            (root || document).querySelectorAll('.local-time').forEach(function (el) {
+                if (el.dataset.converted) return;
+                var raw = el.textContent.trim();
+                if (!raw || raw.indexOf(':') === -1) return;
+                raw = raw.replace(/(\.\d{3})\d+/, '$1');
+                var d = new Date(raw + (raw.endsWith('Z') ? '' : 'Z'));
+                if (isNaN(d)) return;
+                el.textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                el.dataset.converted = '1';
+            });
+        }
+        new MutationObserver(function () { convertLocalTimes(); })
+            .observe(document.body, {childList: true, subtree: true});
+        convertLocalTimes();
+    </script>
+</body>
+
+</html>

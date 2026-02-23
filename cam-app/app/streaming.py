@@ -11,6 +11,11 @@ from .database import add_active_stream, update_stream_status
 # Global queue to store FFmpeg output
 ffmpeg_output_queue = queue.Queue()
 
+RTMP_BASES = {
+    "gamechanger": "rtmps://601c62c19c9e.global-contribute.live-video.net:443/app",
+    "youtube": "rtmp://a.rtmp.youtube.com/live2",
+}
+
 
 def input_cam_url(config):
     """Generate the RTSP camera input URL."""
@@ -18,15 +23,27 @@ def input_cam_url(config):
     return input_cam
 
 
-def stream_game(duration=(60 * 4), key="", config=None, name=""):
+def _build_output_url(key: str, destination: str = "gamechanger", custom_url: str = "") -> str:
+    """Build the RTMP output URL for the given destination."""
+    if destination == "custom" and custom_url:
+        return f"{custom_url.rstrip('/')}/{key}"
+    base = RTMP_BASES.get(destination, RTMP_BASES["gamechanger"])
+    return f"{base}/{key}"
+
+
+def stream_game(
+    duration=(60 * 4), key="", config=None, name="", destination="gamechanger", custom_url=""
+):
     """
-    Stream a game from the camera to GameChanger.
+    Stream a game from the camera to an RTMP destination.
 
     Args:
         duration: Duration in seconds for the stream
-        key: GameChanger stream key
+        key: Stream key appended to the destination base URL
         config: Configuration dictionary (not currently used)
         name: Name of the stream for logging purposes
+        destination: Target service — "gamechanger", "youtube", or "custom"
+        custom_url: Full RTMP base URL when destination is "custom"
 
     Returns:
         Return code from FFmpeg process
@@ -34,18 +51,16 @@ def stream_game(duration=(60 * 4), key="", config=None, name=""):
     if config is None:
         config = {}
 
-    logging.info("Starting a stream...")
+    logging.info(f"Starting stream to {destination}...")
     pretty_name = name.replace(" ", "_")
     duration = int(duration)
 
     input_cam = input_cam_url(config)
 
-    # Game Changer Settings
-    gc_base = "rtmps://601c62c19c9e.global-contribute.live-video.net:443/app"
-    if key == "":
-        logging.error("No Destination GC Key Given")
+    if not key:
+        logging.error("No stream key given")
         return
-    output_gc1 = f"{gc_base}/{key}"
+    output_url = _build_output_url(key, destination, custom_url)
 
     ffmpeg_env = os.environ.copy()
     ffmpeg_env["FFREPORT"] = f"level=32:file=logs/%p-%t-{pretty_name}.log"
@@ -75,7 +90,7 @@ def stream_game(duration=(60 * 4), key="", config=None, name=""):
         str(duration),  # Duration
         "-f",
         "flv",
-        output_gc1,  # Output
+        output_url,
     ]
 
     process = subprocess.Popen(
@@ -84,7 +99,10 @@ def stream_game(duration=(60 * 4), key="", config=None, name=""):
 
     # Register stream in database immediately after starting
     try:
-        add_active_stream(job_name=name, pid=process.pid, duration=duration, stream_key=key)
+        add_active_stream(
+            job_name=name, pid=process.pid, duration=duration,
+            stream_key=key, destination=destination,
+        )
     except Exception as e:
         logging.error(f"Failed to register stream in database: {e}")
         # Continue anyway, but log the error

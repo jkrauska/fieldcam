@@ -1,15 +1,16 @@
 """Main entry point for the fieldcam application."""
 
+import json
 import logging
 
+from datastar_py.fastapi import DatastarResponse
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 # Import route handlers
 from .auth import (
-    get_login_form,
     handle_login,
     handle_logout,
     http_exception_handler,
@@ -22,10 +23,13 @@ from .routes import (
     add_job_page,
     cancel_stream_route,
     get_version,
-    list_all_streams_page,
+    history_fragment,
     list_jobs_page,
+    detection_api,
+    detection_fragment,
     remove_job_route,
     serve_field_image,
+    sse_list,
     submit_job,
 )
 from .scheduler import start_cleanup_task
@@ -58,16 +62,36 @@ async def startup_event():
 
 
 # Authentication routes
-@app.get("/login", response_class=HTMLResponse)
+@app.get("/login")
 def login_form(next: str = None):
-    """Display login form."""
-    return get_login_form(next)
+    """Redirect to SPA shell, which shows the login form via the 401 handler."""
+    return RedirectResponse(url=next or "/", status_code=302)
 
 
-@app.post("/login", response_class=HTMLResponse)
+@app.post("/login")
 async def login(request: Request, response: Response):
-    """Handle login submission."""
-    return await handle_login(request, response)
+    """Handle login submission via Datastar SSE or plain form POST."""
+    resp, success, next_url = await handle_login(request, response)
+    is_datastar = request.headers.get("datastar-request") == "true"
+
+    if success:
+        if is_datastar:
+            out = Response(
+                content=f"window.location.href = {json.dumps(next_url)};",
+                media_type="text/javascript",
+            )
+        else:
+            out = RedirectResponse(url=next_url, status_code=302)
+        if resp and "set-cookie" in resp.headers:
+            out.headers["set-cookie"] = resp.headers["set-cookie"]
+        return out
+
+    if is_datastar:
+        from .routes import _make_toast_event
+        return DatastarResponse(_make_toast_event("Incorrect password", "bg-danger"))
+
+    from .routes import render_shell_with_login
+    return render_shell_with_login(request, next_url, error="Incorrect password.")
 
 
 @app.get("/logout", response_class=HTMLResponse)
@@ -77,27 +101,21 @@ def logout(response: Response):
 
 
 # Application routes
-@app.get("/dynamic/field.jpg")
-def dynamic_field_image():
-    """Serve field camera image without caching."""
-    return serve_field_image()
-
-
-@app.get("/list", response_class=HTMLResponse)
-async def list_jobs(request: Request, user=Depends(login_manager)):  # noqa: B008
-    """Display list of scheduled jobs and active streams."""
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """Main page: list of scheduled jobs and active streams (SPA entry)."""
     return await list_jobs_page(request, user)
 
 
-@app.get("/list_all", response_class=HTMLResponse)
-async def list_all(request: Request, user=Depends(login_manager)):  # noqa: B008
-    """Display complete stream history."""
-    return await list_all_streams_page(request, user)
+@app.get("/dynamic/field.jpg")
+def dynamic_field_image(user=Depends(login_manager)):  # noqa: B008
+    """Serve field camera image without caching (auth required)."""
+    return serve_field_image()
 
 
 @app.get("/add", response_class=HTMLResponse)
 def add(request: Request, user=Depends(login_manager)):  # noqa: B008
-    """Display add job form."""
+    """Return add-job form fragment (used by Datastar to reset the modal form)."""
     return add_job_page(request, user)
 
 
@@ -121,3 +139,9 @@ async def cancel_stream(request: Request, user=Depends(login_manager)):  # noqa:
 def version():
     """Return version information about the application build."""
     return get_version()
+
+
+app.get("/api/detections")(detection_api)
+app.get("/fragment/detections", response_class=HTMLResponse)(detection_fragment)
+app.get("/fragment/history", response_class=HTMLResponse)(history_fragment)
+app.get("/sse/list")(sse_list)

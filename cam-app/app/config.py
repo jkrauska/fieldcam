@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     timezone: str = "America/Los_Angeles"
     token_expiry_minutes: int = 30
     jobs_db_path: str = "sqlite:///jobs/jobs.sqlite"
+    # Path to field camera snapshot (cron/ffmpeg writes here; default /tmp so any user can read)
+    field_image_path: str = "/tmp/field.jpg"
 
     model_config = SettingsConfigDict(**_SETTINGS_KW)
 

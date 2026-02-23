@@ -2,10 +2,10 @@
 name = "fieldcam"
 version = "0.1.0"
 description = "Web app for scheduling and managing live camera streams for ball field events"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "apscheduler",
+    "datastar-py>=0.8.0",
     "fastapi-login",
     "fastapi-proxiedheadersmiddleware",
     "fastapi[standard]",
@@ -21,3 +21,11 @@ dev = [
     "ruff",
     "pre-commit",
 ]
+# YOLO person detection (count people in field image)
+yolo = [
+    "ultralytics>=8.0.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["jobs*"]

@@ -1,26 +1,12 @@
 """Authentication routes and handlers for the fieldcam application."""
 
 import logging
-from urllib.parse import urlencode
 
 from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .config import login_manager, settings
-
-
-def create_redirect_content(next: str, result: str = "unsuccessful") -> str:
-    """Create HTML content for redirect with a message."""
-    return f"""
-        <html><head><title>Redirecting...</title>
-        <script type="text/javascript">
-        setTimeout(function() {{
-        window.location.href = "{next}";
-        }}, 100);
-        </script></head>
-        <body><p>Login {result}. Try again?...</p></body>
-        </html>
-    """
+from . import routes
 
 
 @login_manager.user_loader()
@@ -31,148 +17,56 @@ def load_user(user_id: str):
     return None
 
 
-def get_login_form(next: str | None = None) -> HTMLResponse:
-    """Generate the login form HTML."""
-    next_input = f'<input type="hidden" name="next" value="{next}" />' if next else ""
-    return HTMLResponse(f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Login</title>
-            <style>
-                * {{
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                    font-family: Arial, sans-serif;
-                }}
-
-                body {{
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    background: #f4f4f4;
-                    padding: 20px;
-                }}
-
-                .login-container {{
-                    width: 100%;
-                    max-width: 350px;
-                    padding: 20px;
-                    background: white;
-                    border-radius: 10px;
-                    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-                    text-align: center;
-                }}
-
-                .login-container h2 {{
-                    margin-bottom: 20px;
-                }}
-
-                .input-group {{
-                    margin-bottom: 15px;
-                    text-align: left;
-                }}
-
-                .input-group label {{
-                    display: block;
-                    font-size: 14px;
-                    margin-bottom: 5px;
-                }}
-
-                .input-group input {{
-                    width: 100%;
-                    padding: 10px;
-                    border: 1px solid #ccc;
-                    border-radius: 5px;
-                    font-size: 16px;
-                }}
-
-                .login-btn {{
-                    width: 100%;
-                    padding: 10px;
-                    background: #007BFF;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    font-size: 16px;
-                    cursor: pointer;
-                    transition: background 0.3s ease-in-out;
-                }}
-
-                .login-btn:hover {{
-                    background: #0056b3;
-                }}
-
-                @media (max-width: 400px) {{
-                    .login-container {{
-                        padding: 15px;
-                    }}
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="login-container">
-                <h2>Login</h2>
-                <form action="#" method="POST">
-                    {next_input}
-                    <div class="input-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" required>
-                    </div>
-                    <button type="submit" class="login-btn">Login</button>
-                </form>
-            </div>
-        </body>
-        </html>
-    """)
-
-
-async def handle_login(request: Request, response: Response) -> HTMLResponse:
-    """Handle login POST request."""
+async def handle_login(request: Request, response: Response) -> tuple[Response, bool, str]:
+    """
+    Handle login POST request.
+    Returns (response, success, next_url).
+    When success, response has Set-Cookie; caller may replace body with fragment for SPA.
+    When failure, response is login fragment with error so client can patch in place.
+    """
     cookies = request.cookies
     logging.info(f"Incoming Cookies: {cookies}")
     user_id = "shared_user"
 
     form = await request.form()
     password = form.get("password")
-    next = form.get("next") or "/list"
+    next_val = form.get("next") or "/"
+    next_url = next_val if isinstance(next_val, str) else "/"
 
     logging.info("Password check")
     if password not in settings.passwords_list:
-        return create_redirect_content(next)
+        content = routes._render_login_fragment(request, next_url, error="Invalid password.")
+        return (
+            HTMLResponse(
+                content=content,
+                headers={"datastar-selector": "#app-content", "datastar-mode": "inner"},
+            ),
+            False,
+            next_url,
+        )
 
-    # Redirect to the original page if 'next' is provided
-    next_url = next or "/list"
-
-    response = HTMLResponse(content=create_redirect_content(next_url, "successful"))
+    resp = RedirectResponse(url=next_url, status_code=302)
     access_token = login_manager.create_access_token(data={"sub": user_id})
-    login_manager.set_cookie(response, access_token)
-    return response
+    login_manager.set_cookie(resp, access_token)
+    return (resp, True, next_url)
 
 
 def handle_logout(response: Response) -> RedirectResponse:
-    """Handle logout request."""
-    response = RedirectResponse(url="/login")
+    """Handle logout: redirect to / so SPA shows shell with login form (no /login URL)."""
+    response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie(login_manager.cookie_name)
     return response
 
 
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions, particularly 401 Unauthorized."""
+    """Handle HTTP exceptions. 401: return SPA shell with login form (no redirect, URL unchanged)."""
     if exc.status_code == status.HTTP_401_UNAUTHORIZED:
-        next_url = request.url.path
-        logging.info(f"Redirecting to login page with next={next_url}")
-
-        login_url = "/login"
-        if isinstance(next_url, str) and len(next_url) > 3:
-            redirect_url = f"{login_url}?{urlencode({'next': next_url})}"
-        else:
-            redirect_url = login_url
-        return RedirectResponse(url=redirect_url, status_code=302)
-    else:
-        # Re-raise the exception for other status codes
-        raise exc
+        next_url = request.url.path or "/"
+        if not isinstance(next_url, str) or len(next_url) <= 1:
+            next_url = "/"
+        logging.info(f"Returning shell with login form for next={next_url} (SPA, no redirect)")
+        return routes.render_shell_with_login(request, next_url)
+    return HTMLResponse(
+        content=f"<div id='error'>{exc.detail}</div>",
+        status_code=exc.status_code,
+    )

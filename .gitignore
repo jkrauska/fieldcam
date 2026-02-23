@@ -1,4 +1,6 @@
 
+__pycache__/
+
 letsencrypt/acme.json
 cam-app/venv
 cam-app/.ruff_cache
@@ -7,6 +9,9 @@ jobs/jobs.sqlite
 cam-app/app/secrets.json
 cam-app/app/version.json
 logs/*
+*.log
+*.sqlite
+*.pt
 cam-app/app/static/field.jpg
 
 # Environment files (keep .env.example in git)

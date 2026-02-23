@@ -1,0 +1,60 @@
+{% if streams %}
+<div class="table-responsive">
+    <table class="table table-hover table-sm table-striped">
+        <thead class="table-dark">
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Status</th>
+                <th scope="col">Dest</th>
+                <th scope="col">Started</th>
+                <th scope="col">Duration (min)</th>
+                <th scope="col">Key</th>
+                <th scope="col">PID</th>
+                <th scope="col">Error</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stream in streams %}
+            <tr>
+                <td>{{ stream.job_name | replace("SFLL ", "") | replace("Pirates Majors", "Majors Pirates") }}</td>
+                <td>
+                    {% if stream.status == 'running' %}
+                    <span class="badge status-running"><i class="bi bi-circle-fill"></i> Running</span>
+                    {% elif stream.status == 'completed' %}
+                    <span class="badge status-completed"><i class="bi bi-check-circle-fill"></i> Completed</span>
+                    {% elif stream.status == 'failed' %}
+                    <span class="badge status-failed"><i class="bi bi-exclamation-triangle-fill"></i> Failed</span>
+                    {% elif stream.status == 'cancelled' %}
+                    <span class="badge status-cancelled"><i class="bi bi-slash-circle-fill"></i> Cancelled</span>
+                    {% else %}
+                    <span class="badge bg-secondary">{{ stream.status }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if stream.destination == 'youtube' %}<span class="badge bg-danger">YT</span>
+                    {% elif stream.destination == 'custom' %}<span class="badge bg-primary">Custom</span>
+                    {% else %}<span class="badge bg-success">GC</span>
+                    {% endif %}
+                </td>
+                <td><span class="local-time">{{ stream.start_time }}</span></td>
+                <td>{{ (stream.duration / 60) | round | int }}</td>
+                <td>
+                    {% if stream.stream_key %}
+                    <span class="d-inline-block" tabindex="0" title="{{ stream.stream_key }}">{{ stream.stream_key[13:][:6] }}...</span>
+                    {% else %}N/A{% endif %}
+                </td>
+                <td>{{ stream.pid }}</td>
+                <td>
+                    {% if stream.error_message %}
+                    <span class="text-danger" title="{{ stream.error_message }}"><i class="bi bi-info-circle-fill"></i></span>
+                    {% else %}-{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<div class="text-muted"><p>Total streams: {{ streams | length }}</p></div>
+{% else %}
+<div class="alert alert-info"><i class="bi bi-info-circle"></i> No stream history available yet.</div>
+{% endif %}
