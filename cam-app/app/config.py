@@ -1,6 +1,7 @@
 """Configuration management for the fieldcam application."""
 
 import atexit
+import hashlib
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -39,11 +40,18 @@ class Settings(BaseSettings):
 
     # Application settings
     location: str = "Tepper"
-    long_string: str = ""
 
     # Authentication
     auth_hash_sfll: str = ""
     passwords: str = ""  # Comma-separated list
+
+    # Blackout info (shown in schedule form)
+    blackout_season: str = ""
+    blackout_teams: str = "TBD"
+
+    # RTMP base URLs per destination (key appended at stream time)
+    rtmp_gamechanger: str = "rtmps://601c62c19c9e.global-contribute.live-video.net:443/app"
+    rtmp_youtube: str = "rtmp://a.rtmp.youtube.com/live2"
 
     # Optional settings
     timezone: str = "America/Los_Angeles"
@@ -84,9 +92,12 @@ JOBS_DB_URL = _resolve_jobs_db_url(settings.jobs_db_path)
 # Timezone configuration
 LOCAL_TZ = ZoneInfo(settings.timezone)
 
+# Derive a 32-byte key so PyJWT doesn't warn about short HMAC keys
+_jwt_secret = hashlib.sha256(settings.secret_key.encode()).hexdigest()
+
 # Login Manager Setup
 login_manager = LoginManager(
-    settings.secret_key,
+    _jwt_secret,
     token_url="/login",
     use_cookie=True,
     use_header=False,

@@ -8,12 +8,13 @@ import subprocess
 from .config import settings
 from .database import add_active_stream, update_stream_status
 
-# Global queue to store FFmpeg output
+# Global queue to store FFmpeg output — producer side of stream health monitoring.
+# Consumer not yet implemented. See FEATURE_STREAM_HEALTH.md for plan.
 ffmpeg_output_queue = queue.Queue()
 
 RTMP_BASES = {
-    "gamechanger": "rtmps://601c62c19c9e.global-contribute.live-video.net:443/app",
-    "youtube": "rtmp://a.rtmp.youtube.com/live2",
+    "gamechanger": settings.rtmp_gamechanger,
+    "youtube": settings.rtmp_youtube,
 }
 
 

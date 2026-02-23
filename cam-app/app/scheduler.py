@@ -49,7 +49,7 @@ def new_stream(
         duration = new_duration.total_seconds()
 
     if not key:
-        key = "sk_us-east-1_fakefake"
+        raise ValueError("Stream key is required")
 
     kwargs = {
         "duration": duration,
@@ -61,19 +61,27 @@ def new_stream(
     if destination == "custom" and custom_url:
         kwargs["custom_url"] = custom_url
 
-    try:
-        scheduler.add_job(
-            stream_game,
-            trigger="date",
-            run_date=start_time,
-            id=name,
-            name=name,
-            kwargs=kwargs,
-        )
-    except ConflictingIdError:
-        logging.info(f"Job '{name}' Already Seen")
-        pass
-    return name
+    # If the name already exists, append _1, _2, ... until unique
+    job_name = name
+    suffix = 0
+    while True:
+        try:
+            kwargs["name"] = job_name
+            scheduler.add_job(
+                stream_game,
+                trigger="date",
+                run_date=start_time,
+                id=job_name,
+                name=job_name,
+                kwargs=kwargs,
+            )
+            break
+        except ConflictingIdError:
+            suffix += 1
+            job_name = f"{name}_{suffix}"
+            logging.info(f"Job '{name}' already exists, trying '{job_name}'")
+
+    return job_name
 
 
 def get_scheduled_jobs():

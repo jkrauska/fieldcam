@@ -29,21 +29,37 @@ from .routes import (
     detection_fragment,
     remove_job_route,
     serve_field_image,
+    signal_shutdown,
     sse_list,
     submit_job,
 )
 from .scheduler import start_cleanup_task
 
-# Configure logging
+# Configure logging - apply consistent format to all loggers including uvicorn
+LOG_FORMAT = "%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s"
+LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+    format=LOG_FORMAT,
+    datefmt=LOG_DATEFMT,
 )
+
+# Override uvicorn's loggers to use the same format
+for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+    _logger = logging.getLogger(_name)
+    _logger.handlers.clear()
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATEFMT))
+    _logger.addHandler(_handler)
+    _logger.propagate = False
 
 # Initialize FastAPI app
 app = FastAPI()
 app.add_middleware(ProxyHeadersMiddleware)
+
+from .csrf import CSRFMiddleware  # noqa: E402
+app.add_middleware(CSRFMiddleware)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -59,6 +75,13 @@ async def startup_event():
     init_db()
     start_cleanup_task()
     logging.info("Application startup complete - database and cleanup task initialized")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Signal SSE generators to exit so uvicorn can close connections quickly."""
+    signal_shutdown()
+    logging.info("Shutdown signal sent")
 
 
 # Authentication routes

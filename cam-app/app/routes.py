@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from datastar_py import ServerSentEventGenerator as SSE
@@ -20,6 +20,15 @@ from .event_bus import get_list_version, notify_list_changed
 from .scheduler import cancel_stream, get_scheduled_jobs, new_stream, remove_job
 from .yolo_check import detect_objects
 
+# Shutdown flag — set by the FastAPI shutdown event so SSE generators exit promptly
+_shutting_down = False
+
+
+def signal_shutdown():
+    """Called by the app shutdown event to break SSE loops."""
+    global _shutting_down
+    _shutting_down = True
+
 
 def format_datetime(value, format="%Y-%m-%d %H:%M:%S"):
     """Format a datetime object to a string using strftime."""
@@ -28,9 +37,15 @@ def format_datetime(value, format="%Y-%m-%d %H:%M:%S"):
     return value.strftime(format)
 
 
+def clean_job_name(value):
+    """Normalize legacy job names for display."""
+    return value.replace("SFLL ", "").replace("Pirates Majors", "Majors Pirates")
+
+
 # Set up the templates directory
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["datetime"] = format_datetime
+templates.env.filters["clean_name"] = clean_job_name
 
 
 def serve_field_image():
@@ -116,10 +131,13 @@ def _fragment_response(content: str, selector: str = "#app-content", mode: str =
 def _render_add_fragment(request: Request) -> str:
     """Render the add-job form fragment for SPA."""
     now = datetime.now(tz=LOCAL_TZ)
+    blackout = [t.strip() for t in settings.blackout_teams.split(",") if t.strip()]
     return templates.env.get_template("_add_content.html.j2").render(
         request=request,
         default_date=now.strftime("%Y-%m-%d"),
         default_time=now.strftime("%H:%M"),
+        blackout_season=settings.blackout_season,
+        blackout_teams=blackout,
     )
 
 
@@ -140,6 +158,7 @@ def _render_shell(
 ):
     """Render the SPA shell with the given main content."""
     now = datetime.now(tz=LOCAL_TZ)
+    blackout = [t.strip() for t in settings.blackout_teams.split(",") if t.strip()]
     return templates.TemplateResponse(
         "base_shell.html.j2",
         {
@@ -149,6 +168,8 @@ def _render_shell(
             "user": user,
             "default_date": now.strftime("%Y-%m-%d"),
             "default_time": now.strftime("%H:%M"),
+            "blackout_season": settings.blackout_season,
+            "blackout_teams": blackout,
         },
     )
 
@@ -214,6 +235,26 @@ async def submit_job(
         f"duration={duration_hours}h{duration_minutes}m, {stream_key}, destination={destination}"
     )
 
+    # --- Input validation ---
+    duration_hours = max(0, min(duration_hours, 6))
+    duration_minutes = max(0, min(duration_minutes, 55))
+    if duration_hours == 0 and duration_minutes == 0:
+        raise HTTPException(status_code=400, detail="Duration must be greater than zero.")
+
+    stream_key = stream_key.strip()
+    if not stream_key:
+        raise HTTPException(status_code=400, detail="Stream key is required.")
+
+    if destination not in ("gamechanger", "youtube", "custom"):
+        raise HTTPException(status_code=400, detail="Invalid destination.")
+
+    if destination == "custom":
+        custom_url = custom_url.strip()
+        if not custom_url:
+            raise HTTPException(status_code=400, detail="Custom RTMP URL is required for custom destinations.")
+        if not custom_url.startswith(("rtmp://", "rtmps://")):
+            raise HTTPException(status_code=400, detail="Custom URL must start with rtmp:// or rtmps://")
+
     try:
         date_obj = datetime.strptime(date, "%Y-%m-%d").date()
         logging.info(f"date {date_obj}")
@@ -233,6 +274,15 @@ async def submit_job(
 
     start_datetime_obj = datetime.combine(date_obj, start_time_obj).replace(tzinfo=LOCAL_TZ)
     calculated_duration_seconds = (duration_hours * 3600) + (duration_minutes * 60)
+
+    # Warn if the stream would end entirely in the past
+    now = datetime.now(tz=LOCAL_TZ)
+    end_datetime = start_datetime_obj + timedelta(seconds=calculated_duration_seconds)
+    if end_datetime < now:
+        raise HTTPException(
+            status_code=400,
+            detail="This stream's end time is in the past. Please pick a later date or time.",
+        )
 
     logging.info(f"Start {start_datetime_obj}, duration {calculated_duration_seconds}s")
 
@@ -318,7 +368,7 @@ async def detection_api(user=Depends(login_manager)):  # noqa: B008
 
     Returns JSON with counts per class, total, details, etc.
     """
-    result = detect_objects(image_path=settings.field_image_path)
+    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path)
     if result.get("error") and result.get("counts") is None:
         raise HTTPException(
             status_code=503 if "not installed" in result.get("error", "") else 404,
@@ -329,7 +379,7 @@ async def detection_api(user=Depends(login_manager)):  # noqa: B008
 
 async def detection_fragment(user=Depends(login_manager)):  # noqa: B008
     """Return detection counts as an HTML fragment for Datastar to morph into #detections."""
-    result = detect_objects(image_path=settings.field_image_path)
+    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path)
     counts = result.get("counts")
     if counts:
         parts = [f"{n} {name}{'s' if n != 1 else ''}"
@@ -360,10 +410,12 @@ async def sse_list(request: Request, user=Depends(login_manager)):  # noqa: B008
     """
 
     async def event_generator():
-        last_version = -1
+        # Start at the current version so we don't immediately re-push the
+        # same content the server already rendered into the initial page.
+        last_version = get_list_version()
         last_send = time.time()
         try:
-            while True:
+            while not _shutting_down and not await request.is_disconnected():
                 current_version = get_list_version()
                 now = time.time()
 
@@ -378,7 +430,11 @@ async def sse_list(request: Request, user=Depends(login_manager)):  # noqa: B008
                     yield ": keepalive\n\n"
                     last_send = now
 
-                await asyncio.sleep(2)
+                # Short sleep so we notice _shutting_down quickly
+                for _ in range(10):
+                    if _shutting_down:
+                        return
+                    await asyncio.sleep(0.2)
         except asyncio.CancelledError:
             pass
 

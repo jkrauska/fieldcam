@@ -16,7 +16,7 @@
         <tbody>
             {% for stream in streams %}
             <tr>
-                <td>{{ stream.job_name | replace("SFLL ", "") | replace("Pirates Majors", "Majors Pirates") }}</td>
+                <td>{{ stream.job_name | clean_name }}</td>
                 <td>
                     {% if stream.status == 'running' %}
                     <span class="badge status-running"><i class="bi bi-circle-fill"></i> Running</span>
@@ -40,16 +40,29 @@
                 <td>{{ (stream.duration / 60) | round | int }}</td>
                 <td>
                     {% if stream.stream_key %}
-                    <span class="d-inline-block" tabindex="0" title="{{ stream.stream_key }}">{{ stream.stream_key[13:][:6] }}...</span>
+                    <span class="d-inline-block" tabindex="0" role="button" aria-label="Stream key" title="{{ stream.stream_key }}">{{ stream.stream_key[13:][:6] }}...</span>
                     {% else %}N/A{% endif %}
                 </td>
                 <td>{{ stream.pid }}</td>
                 <td>
                     {% if stream.error_message %}
-                    <span class="text-danger" title="{{ stream.error_message }}"><i class="bi bi-info-circle-fill"></i></span>
+                    <span class="text-danger" role="button" style="cursor:pointer"
+                          aria-label="Show error details"
+                          onclick="var r=this.closest('tr').nextElementSibling; r.style.display=r.style.display==='none'?'table-row':'none'">
+                        <i class="bi bi-info-circle-fill" aria-hidden="true"></i>
+                    </span>
                     {% else %}-{% endif %}
                 </td>
             </tr>
+            {% if stream.error_message %}
+            <tr style="display:none">
+                <td colspan="8">
+                    <div class="alert alert-danger mb-0 py-2 px-3" style="font-size:0.85em">
+                        <strong>Error:</strong> {{ stream.error_message }}
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>

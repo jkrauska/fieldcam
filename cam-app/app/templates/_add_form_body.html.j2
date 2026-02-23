@@ -3,10 +3,12 @@
 .dest-group .btn { flex: 1 1 0; }
 form .col-form-label { width: 8.5rem; flex: 0 0 auto; }
 </style>
-<p class="mb-2"><strong>Spring 2026 Blackout Teams (DO NOT STREAM):</strong></p>
-<ul class="mb-3"><li>TBD</li></ul>
+{% if blackout_season and blackout_teams %}
+<p class="mb-2"><strong>{{ blackout_season + ' ' if blackout_season }}Blackout Teams (DO NOT STREAM):</strong></p>
+<ul class="mb-3">{% for team in blackout_teams %}<li>{{ team }}</li>{% endfor %}</ul>
+{% endif %}
 
-<form data-signals:add-dest="'gamechanger'" onsubmit="event.preventDefault()">
+<form data-signals:add-dest="'gamechanger'" data-signals:add-start-time="'{{ default_time }}'" data-signals:add-dur-h="2" data-signals:add-dur-m="30" onsubmit="event.preventDefault()">
     <div class="row mb-2 align-items-center">
         <label for="add-teamName" class="col-auto col-form-label"><b>Stream Name:</b></label>
         <div class="col">
@@ -22,22 +24,26 @@ form .col-form-label { width: 8.5rem; flex: 0 0 auto; }
     <div class="row mb-2 align-items-center">
         <label for="add-startTime" class="col-auto col-form-label"><b>Start Time:</b></label>
         <div class="col">
-            <input type="time" class="form-control" id="add-startTime" name="startTime" value="{{ default_time }}" required>
+            <input type="time" class="form-control" id="add-startTime" name="startTime" value="{{ default_time }}" required
+                data-on:input="$addStartTime = el.value" data-on:change="$addStartTime = el.value">
         </div>
     </div>
     <div class="row mb-2 align-items-center">
         <label class="col-auto col-form-label"><b>Duration:</b></label>
         <div class="col d-flex gap-2 align-items-center">
-            <select class="form-select" name="durationHours" id="add-durationHours" style="width: auto;">
+            <select class="form-select" name="durationHours" id="add-durationHours" style="width: auto;"
+                data-on:change="$addDurH = +el.value">
                 {% for h in range(0, 7) %}
                 <option value="{{ h }}" {{ 'selected' if h == 2 }}>{{ h }}H</option>
                 {% endfor %}
             </select>
-            <select class="form-select" name="durationMinutes" id="add-durationMinutes" style="width: auto;">
+            <select class="form-select" name="durationMinutes" id="add-durationMinutes" style="width: auto;"
+                data-on:change="$addDurM = +el.value">
                 {% for m in range(0, 60, 5) %}
                 <option value="{{ m }}" {{ 'selected' if m == 30 }}>{{ '%02d' | format(m) }}m</option>
                 {% endfor %}
             </select>
+            <span class="text-muted small ms-2" data-text="(() => { if (!$addStartTime) return ''; const p = $addStartTime.split(':'), t = +p[0]*60 + +p[1] + $addDurH*60 + $addDurM, h = ~~(t/60)%24, m = t%60; return 'Ends at ' + (h%12||12) + ':' + String(m).padStart(2,'0') + (h>=12?' PM':' AM') + (t>=1440?' (+1 day)':''); })()"></span>
         </div>
     </div>
     <div class="mb-3">
@@ -67,7 +73,8 @@ form .col-form-label { width: 8.5rem; flex: 0 0 auto; }
     </div>
     <div class="mb-3" data-show="$addDest === 'custom'" style="display:none">
         <label for="add-customUrl" class="form-label"><b>Custom RTMP URL:</b></label>
-        <input type="text" class="form-control" id="add-customUrl" name="customUrl" placeholder="rtmp://your-server/path">
+        <input type="text" class="form-control" id="add-customUrl" name="customUrl" placeholder="rtmp://your-server/path"
+            pattern="rtmps?://.*" title="Must start with rtmp:// or rtmps://">
     </div>
     <div class="mb-3">
         <label for="add-streamKey" class="form-label"><b>Stream Key:</b></label>

@@ -1,6 +1,6 @@
 {# Rendered inside a div with id="list-content" for Datastar morphing. #}
 <div class="image-container">
-    <img src="/dynamic/field.jpg" alt="Field">
+    <img src="/dynamic/field.jpg" alt="Field" loading="lazy">
     <div class="image-text">{{ field_name }} Field</div>
 </div>
 <div class="text-center">
@@ -38,7 +38,7 @@
                         <i class="bi bi-broadcast-pin"></i> LIVE
                     </span>
                 </td>
-                <td>{{ stream.job_name | replace("SFLL ", "") | replace("Pirates Majors", "Majors Pirates") }}</td>
+                <td>{{ stream.job_name | clean_name }}</td>
                 <td>
                     {% if stream.destination == 'youtube' %}<span class="badge bg-danger">YT</span>
                     {% elif stream.destination == 'custom' %}<span class="badge bg-primary">Custom</span>
@@ -49,7 +49,8 @@
                 <td>{{ (stream.duration / 60) | round | int }}</td>
                 <td>
                     {% if stream.stream_key %}
-                    <span class="d-inline-block stream-key" tabindex="0"
+                    <span class="d-inline-block stream-key" tabindex="0" role="button"
+                        aria-label="Copy stream key to clipboard"
                         data-on:click="copyToClipboard('{{ stream.stream_key }}', el)"
                         title="{{ stream.stream_key }}">
                         {{ stream.stream_key[13:][:6] }}...
@@ -78,7 +79,7 @@
                         <i class="bi bi-calendar-event"></i> Scheduled
                     </span>
                 </td>
-                <td>{{ job.name | replace("SFLL ", "") | replace("Pirates Majors", "Majors Pirates") }}</td>
+                <td>{{ job.name | clean_name }}</td>
                 <td>
                     {% set dest = job.kwargs.destination | default('gamechanger') %}
                     {% if dest == 'youtube' %}<span class="badge bg-danger">YT</span>
@@ -96,7 +97,8 @@
                 </td>
                 <td>
                     {% if job.kwargs.key is defined %}
-                    <span class="d-inline-block stream-key" tabindex="0"
+                    <span class="d-inline-block stream-key" tabindex="0" role="button"
+                        aria-label="Copy stream key to clipboard"
                         data-on:click="copyToClipboard('{{ job.kwargs.key }}', el)"
                         title="{{ job.kwargs.key }}">
                         {{ job.kwargs.key[13:][:6] }}...
