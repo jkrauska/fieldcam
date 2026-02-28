@@ -14,7 +14,7 @@ from fastapi import Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .config import LOCAL_TZ, login_manager, settings
+from .config import LOCAL_TZ, _ENV_FILE, login_manager, settings
 from .database import get_active_streams, get_all_streams
 from .event_bus import get_list_version, notify_list_changed
 from .scheduler import cancel_stream, get_scheduled_jobs, new_stream, remove_job
@@ -67,7 +67,7 @@ def _get_detection_text() -> str:
     """Return object detection summary as display text, cached for 60 seconds."""
     now = time.time()
     if now > _detection_cache["expires"]:
-        result = detect_objects(image_path=settings.field_image_path)
+        result = detect_objects(image_path=settings.field_image_path, model_name=settings.yolo_model)
         counts = result.get("counts")
         if counts:
             parts = [f"{n} {name}{'s' if n != 1 else ''}"
@@ -439,6 +439,123 @@ async def sse_list(request: Request, user=Depends(login_manager)):  # noqa: B008
             pass
 
     return DatastarResponse(event_generator())
+
+
+def _require_admin(user):
+    """Raise 403 if user is not an admin."""
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
+# --- Editable .env settings definition ---
+# Each group: (label, caution, [(env_key, display_label, input_type)])
+_SETTINGS_GROUPS = [
+    ("Application", False, [
+        ("LOCATION", "Location name", "text"),
+        ("BLACKOUT_SEASON", "Blackout season", "text"),
+        ("BLACKOUT_TEAMS", "Blackout teams (comma-separated)", "text"),
+        ("TIMEZONE", "Timezone", "text"),
+        ("TOKEN_EXPIRY_MINUTES", "Token expiry (minutes)", "number"),
+    ]),
+    ("Authentication", False, [
+        ("PASSWORDS", "Passwords (comma-separated)", "text"),
+        ("ADMIN_PASSWORD", "Admin password", "text"),
+    ]),
+    ("Camera", True, [
+        ("CAM_HOST", "Camera IP", "text"),
+        ("CAM_USER", "Camera username", "text"),
+        ("CAM_PASS", "Camera password", "text"),
+    ]),
+    ("Streaming", False, [
+        ("RTMP_GAMECHANGER", "RTMP GameChanger URL", "text"),
+        ("RTMP_YOUTUBE", "RTMP YouTube URL", "text"),
+    ]),
+    ("Security", True, [
+        ("SECRET_KEY", "Secret key", "text"),
+        ("COOKIE_NAME", "Cookie name", "text"),
+    ]),
+    ("Advanced", False, [
+        ("JOBS_DB_PATH", "Jobs DB path", "text"),
+        ("FIELD_IMAGE_PATH", "Field image path", "text"),
+        ("YOLO_MODEL", "YOLO model", "text"),
+    ]),
+]
+
+
+def _read_env_values() -> dict[str, str]:
+    """Read current .env file into a dict (raw key=value pairs)."""
+    values = {}
+    if _ENV_FILE.is_file():
+        for line in _ENV_FILE.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, _, val = line.partition("=")
+                values[key.strip()] = val.strip()
+    return values
+
+
+def _write_env_values(values: dict[str, str]):
+    """Rewrite the .env file preserving comments and updating/adding values."""
+    lines = []
+    written_keys: set[str] = set()
+    if _ENV_FILE.is_file():
+        for line in _ENV_FILE.read_text().splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key = stripped.partition("=")[0].strip()
+                if key in values:
+                    lines.append(f"{key}={values[key]}")
+                    written_keys.add(key)
+                else:
+                    lines.append(line)
+            else:
+                lines.append(line)
+    # Append any new keys not already in the file
+    for key, val in values.items():
+        if key not in written_keys:
+            lines.append(f"{key}={val}")
+    _ENV_FILE.write_text("\n".join(lines) + "\n")
+
+
+async def settings_fragment(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """Return settings form as HTML fragment (admin only)."""
+    _require_admin(user)
+    env_values = _read_env_values()
+    html = templates.env.get_template("_settings_content.html.j2").render(
+        request=request,
+        groups=_SETTINGS_GROUPS,
+        values=env_values,
+    )
+    return _fragment_response(html, selector="#settings-modal-body", mode="inner")
+
+
+async def save_settings(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """Save settings to .env and restart the application (admin only)."""
+    _require_admin(user)
+    form = await request.form()
+    env_values = _read_env_values()
+
+    # Update only keys that are in our editable groups
+    editable_keys = {key for _, _, fields in _SETTINGS_GROUPS for key, _, _ in fields}
+    for key in editable_keys:
+        form_val = form.get(key)
+        if form_val is not None:
+            env_values[key] = form_val
+
+    _write_env_values(env_values)
+    logging.info("Settings saved to .env — restarting application")
+
+    # Touch this file so uvicorn's file watcher triggers a reload
+    Path(__file__).touch()
+
+    # Close modal, show toast, and reload page after server has restarted
+    return DatastarResponse([
+        SSE.patch_signals({"showSettingsModal": False}),
+        _make_toast_event("Settings saved — restarting...", "bg-success"),
+        SSE.execute_script("setTimeout(() => window.location.reload(), 5000)"),
+    ])
 
 
 def get_version():

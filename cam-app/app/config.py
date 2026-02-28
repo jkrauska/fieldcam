@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     # Authentication
     auth_hash_sfll: str = ""
     passwords: str = ""  # Comma-separated list
+    admin_password: str = ""  # Admin password unlocks settings page
 
     # Blackout info (shown in schedule form)
     blackout_season: str = ""
@@ -59,6 +60,8 @@ class Settings(BaseSettings):
     jobs_db_path: str = "sqlite:///jobs/jobs.sqlite"
     # Path to field camera snapshot (cron/ffmpeg writes here; default /tmp so any user can read)
     field_image_path: str = "/tmp/field.jpg"
+    # YOLO model variant (e.g. yolov8n.pt, yolov8s.pt)
+    yolo_model: str = "yolov8n.pt"
 
     model_config = SettingsConfigDict(**_SETTINGS_KW)
 

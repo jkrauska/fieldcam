@@ -27,8 +27,10 @@ def _client_ip(request: Request) -> str:
 @login_manager.user_loader()
 def load_user(user_id: str):
     """Load user for authentication."""
+    if user_id == "admin_user":
+        return {"user_id": user_id, "is_admin": True}
     if user_id == "shared_user":
-        return {"user_id": user_id}
+        return {"user_id": user_id, "is_admin": False}
     return None
 
 
@@ -39,7 +41,6 @@ async def handle_login(request: Request, response: Response) -> tuple[Response, 
     When success, response has Set-Cookie; caller may replace body with fragment for SPA.
     When failure, response is login fragment with error so client can patch in place.
     """
-    user_id = "shared_user"
     ip = _client_ip(request)
 
     form = await request.form()
@@ -58,7 +59,11 @@ async def handle_login(request: Request, response: Response) -> tuple[Response, 
         logging.warning(f"Login backoff: {ip} delayed {delay}s (attempt {_fail_counts[ip] + 1})")
         await asyncio.sleep(delay)
 
-    if password not in settings.passwords_list:
+    # Determine role: admin password takes priority, then regular passwords
+    is_admin = settings.admin_password and password == settings.admin_password
+    is_regular = password in settings.passwords_list
+
+    if not is_admin and not is_regular:
         _fail_counts[ip] += 1
         _last_fail[ip] = time.time()
         logging.warning(f"Login FAILED from {ip} (attempt {_fail_counts[ip]})")
@@ -72,10 +77,12 @@ async def handle_login(request: Request, response: Response) -> tuple[Response, 
             next_url,
         )
 
+    user_id = "admin_user" if is_admin else "shared_user"
+
     # Success — reset counter
     _fail_counts.pop(ip, None)
     _last_fail.pop(ip, None)
-    logging.info(f"Login OK from {ip}")
+    logging.info(f"Login OK from {ip} (role={'admin' if is_admin else 'user'})")
 
     resp = RedirectResponse(url=next_url, status_code=302)
     access_token = login_manager.create_access_token(data={"sub": user_id})

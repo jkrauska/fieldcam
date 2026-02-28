@@ -28,7 +28,9 @@ from .routes import (
     detection_api,
     detection_fragment,
     remove_job_route,
+    save_settings,
     serve_field_image,
+    settings_fragment,
     signal_shutdown,
     sse_list,
     submit_job,
@@ -167,4 +169,6 @@ def version():
 app.get("/api/detections")(detection_api)
 app.get("/fragment/detections", response_class=HTMLResponse)(detection_fragment)
 app.get("/fragment/history", response_class=HTMLResponse)(history_fragment)
+app.get("/fragment/settings", response_class=HTMLResponse)(settings_fragment)
+app.post("/settings/save", response_class=HTMLResponse)(save_settings)
 app.get("/sse/list")(sse_list)

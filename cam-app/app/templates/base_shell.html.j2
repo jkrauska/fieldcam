@@ -51,7 +51,7 @@
     </style>
 </head>
 
-<body data-signals:show-schedule-modal="false" data-signals:show-history-modal="false">
+<body data-signals:show-schedule-modal="false" data-signals:show-history-modal="false" data-signals:show-settings-modal="false">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">FieldCam</a>
@@ -60,7 +60,13 @@
                 <a class="nav-link" href="#" role="button" data-on:click="evt.preventDefault(); $showScheduleModal = true">Schedule</a>
                 <a class="nav-link" href="#" role="button" data-on:click="evt.preventDefault(); $showHistoryModal = true; @get('/fragment/history')">History</a>
             </div>
-            <div class="navbar-nav ms-auto align-items-center">
+            <div class="navbar-nav ms-auto align-items-center gap-2">
+                {% if user.is_admin %}
+                <a href="#" class="btn btn-outline-warning btn-sm py-1 px-2" title="Settings" aria-label="Settings"
+                   data-on:click="evt.preventDefault(); $showSettingsModal = true; @get('/fragment/settings')">
+                    <i class="bi bi-gear-fill" aria-hidden="true"></i>
+                </a>
+                {% endif %}
                 <a href="/logout" class="btn btn-outline-light btn-sm py-1 px-2" title="Log out" aria-label="Log out">
                     <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
                 </a>
@@ -105,6 +111,24 @@
                     <button type="button" class="btn-close" aria-label="Close" data-on:click="$showHistoryModal = false"></button>
                 </div>
                 <div class="modal-body" id="history-modal-body">
+                    <div class="text-center py-4"><div class="spinner-border text-secondary" role="status"><span class="visually-hidden">Loading…</span></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings modal (admin only) -->
+    <div class="modal-backdrop" style="opacity:0.5; display:none" data-show="$showSettingsModal" data-on:click="$showSettingsModal = false"></div>
+    <div id="settings-modal" class="modal" data-class:d-block="$showSettingsModal"
+         data-on:click="if(event.target===el) $showSettingsModal = false"
+         data-on:keydown.escape.window="$showSettingsModal = false">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-gear-fill"></i> Settings</h5>
+                    <button type="button" class="btn-close" aria-label="Close" data-on:click="$showSettingsModal = false"></button>
+                </div>
+                <div class="modal-body" id="settings-modal-body">
                     <div class="text-center py-4"><div class="spinner-border text-secondary" role="status"><span class="visually-hidden">Loading…</span></div></div>
                 </div>
             </div>

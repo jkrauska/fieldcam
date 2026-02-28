@@ -127,6 +127,18 @@ if __name__ == "__main__":
     import sys
 
     args = sys.argv[1:]
+
+    # Extract --model value
+    model = DEFAULT_MODEL
+    if "--model" in args:
+        idx = args.index("--model")
+        if idx + 1 < len(args):
+            model = args[idx + 1]
+            args = args[:idx] + args[idx + 2:]
+        else:
+            print("--model requires a value", file=sys.stderr)
+            sys.exit(1)
+
     flags = {a for a in args if a.startswith("-")}
     positional = [a for a in args if not a.startswith("-")]
 
@@ -136,10 +148,10 @@ if __name__ == "__main__":
             from .config import settings
             path = settings.field_image_path
         except Exception:
-            print("Usage: python -m app.yolo_check [image_path] [-v] [--all]", file=sys.stderr)
+            print("Usage: python -m app.yolo_check [image_path] [-v] [--all] [--model yolov8s.pt]", file=sys.stderr)
             sys.exit(1)
 
-    result = detect_objects(path, detect_all="--all" in flags)
+    result = detect_objects(path, model_name=model, detect_all="--all" in flags)
     if result.get("error"):
         print(result["error"], file=sys.stderr)
         sys.exit(2)

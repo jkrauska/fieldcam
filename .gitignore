@@ -17,3 +17,6 @@ cam-app/app/static/field.jpg
 # Environment files (keep .env.example in git)
 .env
 cam-app/.env
+
+# Claude Code worktrees
+.claude/worktrees/

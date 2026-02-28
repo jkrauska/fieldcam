@@ -78,15 +78,9 @@ def stream_game(
         "-i",
         input_cam,  # Input
         "-c:v",
-        "copy",
-        "-bufsize",
-        "12000k",
-        "-g",
-        "60",  # Video options
+        "copy",  # Video passthrough
         "-c:a",
-        "aac",
-        "-b:a",
-        "128k",  # Audio options
+        "copy",  # Audio passthrough
         "-t",
         str(duration),  # Duration
         "-f",
