@@ -77,7 +77,7 @@
         {{ page_content | safe }}
     </main>
 
-    <footer class="text-center text-muted small py-3" style="opacity:0.4">{{ app_version | default('dev') }}<br>Uptime: {{ app_uptime | default('—') }}</footer>
+    <footer class="text-center text-muted small py-3" style="opacity:0.4">{{ app_version | default('dev') }}<br>Uptime: {{ app_uptime | default('—') }} · CPU: {{ cpu_temp | default('—') }}</footer>
 
     <!-- Schedule modal: Datastar signal-driven -->
     <div class="modal-backdrop" style="opacity:0.5; display:none" data-show="$showScheduleModal" data-on:click="$showScheduleModal = false"></div>

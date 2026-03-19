@@ -42,6 +42,8 @@ COPY --from=python-env /usr/local/bin /usr/local/bin
 # Set working directory
 WORKDIR /code
 
+ENV YOLO_CONFIG_DIR=/tmp/Ultralytics
+
 # Copy application code
 COPY ./app /code/app
 

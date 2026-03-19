@@ -56,6 +56,15 @@ except Exception:
 _START_TIME = time.time()
 
 
+def _cpu_temp() -> str:
+    """Return CPU temperature in °C, or '—' if unavailable."""
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            return f"{int(f.read().strip()) / 1000:.1f}°C"
+    except OSError:
+        return "—"
+
+
 def _uptime_text() -> str:
     """Return human-readable uptime like '3 days' or '45 minutes'."""
     secs = int(time.time() - _START_TIME)
@@ -232,6 +241,7 @@ def _render_shell(
             "blackout_teams": blackout,
             "app_version": APP_VERSION,
             "app_uptime": _uptime_text(),
+            "cpu_temp": _cpu_temp(),
         },
     )
 

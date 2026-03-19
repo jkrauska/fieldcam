@@ -13,3 +13,5 @@ services:
       - "./cam-app/app/static:/code/app/static"  # static assets
       - "./jobs:/code/jobs" # sqlite db
       - "./logs:/code/logs" # log files
+      - "./cam-app/models:/code/models:ro"  # YOLO model weights
+      - "/sys/class/thermal:/sys/class/thermal:ro"  # CPU temp

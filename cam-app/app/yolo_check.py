@@ -12,7 +12,7 @@ TARGET_CLASSES: dict[int, str] = {
     14: "bird",
 }
 
-DEFAULT_MODEL = "yolov8n.pt"
+DEFAULT_MODEL = "models/yolov8n.pt"
 
 _model_cache: dict[str, object] = {}
 
@@ -158,7 +158,7 @@ if __name__ == "__main__":
             from .config import settings
             path = settings.field_image_path
         except Exception:
-            print("Usage: python -m app.yolo_check [image_path] [-v] [--all] [--model yolov8s.pt]", file=sys.stderr)
+            print("Usage: python -m app.yolo_check [image_path] [-v] [--all] [--model models/yolov8s.pt]", file=sys.stderr)
             sys.exit(1)
 
     result = detect_objects(path, model_name=model, detect_all="--all" in flags)
