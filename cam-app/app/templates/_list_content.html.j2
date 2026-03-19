@@ -1,6 +1,10 @@
 {# Rendered inside a div with id="list-content" for Datastar morphing. #}
 <div class="image-container">
-    <img src="/dynamic/field.jpg" alt="Field" loading="lazy">
+    <img src="/dynamic/field.jpg" alt="Field" loading="lazy"
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+    <div style="display:none; width:100%; aspect-ratio:16/9; border:2px dashed #6c757d; border-radius:8px; align-items:center; justify-content:center; color:#6c757d;">
+        No image available
+    </div>
     <div class="image-text">{{ field_name }} Field</div>
 </div>
 <div class="text-center">
@@ -25,16 +29,16 @@
                 <th scope="col">Name</th>
                 <th scope="col">Dest</th>
                 <th scope="col">Start</th>
-                <th scope="col">Duration (min)</th>
+                <th scope="col">Duration</th>
                 <th scope="col">Key</th>
                 <th align="center" scope="col">Control</th>
             </tr>
         </thead>
         <tbody>
             {% for stream in active_streams %}
-            <tr class="table-danger">
-                <td>
-                    <span class="badge bg-danger">
+            <tr class="table-success">
+                <td id="stream-status-{{ stream.job_name | replace(' ', '_') }}">
+                    <span class="badge bg-success">
                         <i class="bi bi-broadcast-pin"></i> LIVE
                     </span>
                 </td>
@@ -46,7 +50,9 @@
                     {% endif %}
                 </td>
                 <td><span class="local-time">{{ stream.start_time }}</span></td>
-                <td>{{ (stream.duration / 60) | round | int }}</td>
+                {% set total_m = (stream.duration / 60) | round | int %}
+                {% set total_mm = '%02d' | format(total_m) %}
+                <td id="stream-duration-{{ stream.job_name | replace(' ', '_') }}">00:00 of {{ total_mm }}:00</td>
                 <td>
                     {% if stream.stream_key %}
                     <span class="d-inline-block stream-key" tabindex="0" role="button"
@@ -90,7 +96,8 @@
                 <td><span class="local-time">{{ job.next_run_time | datetime('%Y-%m-%dT%H:%M:%S') }}</span></td>
                 <td>
                     {% if job.kwargs.duration is defined %}
-                    {{ (job.kwargs.duration / 60) | round | int }}
+                    {% set jm = (job.kwargs.duration / 60) | round | int %}
+                    {{ '%02d' | format(jm) }}:00
                     {% else %}
                     N/A
                     {% endif %}
@@ -124,6 +131,9 @@
         </tbody>
     </table>
     </div>
+    {% if active_streams %}
+    <div id="stream-health" data-init="@get('/sse/stream-health')" style="display:none"></div>
+    {% endif %}
 </div>
 {% else %}
 <div class="mt-4" id="streams-section"></div>
@@ -131,7 +141,7 @@
 
 <div class="d-flex container mt-5 justify-content-center gap-3">
     <a href="#" class="btn btn-success btn-lg" style="padding: 20px 40px; font-size: 20px;" role="button" data-on:click="evt.preventDefault(); $showScheduleModal = true">
-        <i class="bi bi-plus-circle-fill" style="color: white; font-size: 1rem;"></i> Schedule A Stream
+        <i class="bi bi-plus-circle-fill" style="color: white; font-size: 1rem;"></i> Schedule Stream
     </a>
     <a href="#" class="btn btn-secondary btn-lg" style="padding: 20px 40px; font-size: 20px;" data-on:click="evt.preventDefault(); $showHistoryModal = true; @get('/fragment/history')">
         <i class="bi bi-clock-history" style="color: white; font-size: 1rem;"></i> View History

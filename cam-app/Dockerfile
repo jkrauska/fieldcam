@@ -23,7 +23,8 @@ COPY pyproject.toml .
 
 # Install dependencies into system Python (no venv in container)
 ENV UV_SYSTEM_PYTHON=1
-RUN uv pip install --no-cache -r pyproject.toml
+RUN uv pip install --no-cache -r pyproject.toml && \
+    uv pip install --no-cache ".[yolo]"
 
 # Runtime stage: Create minimal image
 FROM base-os

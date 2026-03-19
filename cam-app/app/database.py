@@ -108,7 +108,7 @@ def get_all_streams():
     """
     session = SessionLocal()
     try:
-        streams = session.query(ActiveStream).order_by(ActiveStream.created_at.desc()).all()
+        streams = session.query(ActiveStream).order_by(ActiveStream.start_time.desc()).all()
         session.expunge_all()
         return streams
     finally:

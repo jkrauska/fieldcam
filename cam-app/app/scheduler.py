@@ -8,7 +8,7 @@ from apscheduler.jobstores.base import ConflictingIdError
 from .config import LOCAL_TZ, scheduler
 from .database import cancel_active_stream, cleanup_stale_streams
 from .random_names import generate_name
-from .streaming import stream_game
+from .streaming import snapshot_field_image, stream_game
 
 
 def new_stream(
@@ -118,8 +118,20 @@ def start_cleanup_task():
         )
         logging.info("Started periodic cleanup task for stale streams")
     except ConflictingIdError:
-        # Task already exists, which is fine
         logging.info("Cleanup task already running")
+
+    # Grab a field camera snapshot every 60 seconds
+    scheduler.add_job(
+        snapshot_field_image,
+        trigger="interval",
+        seconds=60,
+        id="HIDDEN_snapshot_field",
+        name="HIDDEN_snapshot_field",
+        replace_existing=True,
+    )
+    # Take one immediately at startup
+    snapshot_field_image()
+    logging.info("Started field snapshot task (every 60s)")
 
 
 def cancel_stream(job_name: str):

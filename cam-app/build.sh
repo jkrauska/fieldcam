@@ -4,7 +4,7 @@
 # Usage: ./build.sh [now]
 #   now - Force an immediate build before entering the watch loop
 
-DIRECTORY_TO_WATCH="/home/stream411/fieldcam/cam-app/app"
+DIRECTORY_TO_WATCH="/home/stream411/dstar/fieldcam/cam-app/app"
 
 # Check if running on Linux
 if [[ "$(uname)" != "Linux" ]]; then

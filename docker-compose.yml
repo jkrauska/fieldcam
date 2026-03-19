@@ -10,6 +10,6 @@ services:
     env_file:
       - "./cam-app/.env"  # Load environment variables from .env file
     volumes:
-      - "./cam-app/app/static:/code/app/static"  # field image path (upgrades with cron)
+      - "./cam-app/app/static:/code/app/static"  # static assets
       - "./jobs:/code/jobs" # sqlite db
       - "./logs:/code/logs" # log files

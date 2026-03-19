@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 
 from .config import LOCAL_TZ, _ENV_FILE, login_manager, settings
 from .database import get_active_streams, get_all_streams
-from .event_bus import get_list_version, notify_list_changed
+from .event_bus import get_list_version, get_stats_version, get_stream_stats, notify_list_changed
 from .scheduler import cancel_stream, get_scheduled_jobs, new_stream, remove_job
 from .yolo_check import detect_objects
 
@@ -40,6 +40,29 @@ def format_datetime(value, format="%Y-%m-%d %H:%M:%S"):
 def clean_job_name(value):
     """Normalize legacy job names for display."""
     return value.replace("SFLL ", "").replace("Pirates Majors", "Majors Pirates")
+
+
+# Load build version once at import time
+_version_file = Path("app/version.json")
+try:
+    _v = json.loads(_version_file.read_text()) if _version_file.exists() else {}
+    _build_time = _v.get("build_time", "")
+    _build_date = _build_time[:10].replace("-", "") if _build_time else "?"
+    APP_VERSION = f"Version: {_v.get('git_branch', '?')}@{_v.get('git_commit', '?')[:7]} ({_build_date})"
+except Exception:
+    APP_VERSION = "dev"
+
+_START_TIME = time.time()
+
+
+def _uptime_text() -> str:
+    """Return human-readable uptime like '3 days' or '45 minutes'."""
+    secs = int(time.time() - _START_TIME)
+    if secs >= 86400:
+        return f"{secs // 86400} day{'s' if secs >= 172800 else ''}"
+    if secs >= 3600:
+        return f"{secs // 3600} hour{'s' if secs >= 7200 else ''}"
+    return f"{max(secs // 60, 1)} minute{'s' if secs >= 120 else ''}"
 
 
 # Set up the templates directory
@@ -170,6 +193,8 @@ def _render_shell(
             "default_time": now.strftime("%H:%M"),
             "blackout_season": settings.blackout_season,
             "blackout_teams": blackout,
+            "app_version": APP_VERSION,
+            "app_uptime": _uptime_text(),
         },
     )
 
@@ -432,6 +457,103 @@ async def sse_list(request: Request, user=Depends(login_manager)):  # noqa: B008
 
                 # Short sleep so we notice _shutting_down quickly
                 for _ in range(10):
+                    if _shutting_down:
+                        return
+                    await asyncio.sleep(0.2)
+        except asyncio.CancelledError:
+            pass
+
+    return DatastarResponse(event_generator())
+
+
+def _format_bitrate_short(bitrate: str) -> str:
+    """Convert e.g. '4040.9kbits/s' to '4Mb/s'."""
+    if not bitrate or bitrate == "N/A":
+        return ""
+    bitrate = bitrate.strip()
+    try:
+        if "kbits/s" in bitrate:
+            kbits = float(bitrate.replace("kbits/s", ""))
+            if kbits >= 1000:
+                return f"{kbits / 1000:.0f}Mb/s"
+            return f"{kbits:.0f}kb/s"
+    except ValueError:
+        pass
+    return bitrate
+
+
+def _format_elapsed_of_total(out_time: str, duration_secs: int) -> str:
+    """Format 'MM:SS of MM:SSm' from out_time HH:MM:SS and total duration seconds."""
+    # Parse out_time
+    parts = out_time.split(":")
+    try:
+        elapsed_s = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+    except (ValueError, IndexError):
+        elapsed_s = 0
+    em, es = divmod(elapsed_s, 60)
+    tm, ts = divmod(duration_secs, 60)
+    return f"{em:02d}:{es:02d} of {tm:02d}:{ts:02d}"
+
+
+def _render_stream_health_patches(stats: dict[str, dict], active_streams) -> list[tuple[str, str, str]]:
+    """Return list of (selector, html, mode) tuples for patching stream table cells."""
+    # Build a lookup of duration by job_name from active_streams
+    durations = {}
+    for stream in active_streams:
+        durations[stream.job_name] = stream.duration
+
+    patches = []
+    for name, s in stats.items():
+        bitrate = _format_bitrate_short(s.get("bitrate", "N/A"))
+        out_time = s.get("out_time", "00:00:00")
+        duration = durations.get(name, 0)
+
+        # Status cell: "LIVE 4Mb/s"
+        rate_text = f" {bitrate}" if bitrate else ""
+        status_html = (
+            f'<span class="badge bg-success">'
+            f'<i class="bi bi-broadcast-pin"></i> LIVE{rate_text}</span>'
+        )
+        patches.append((f"#stream-status-{name.replace(' ', '_')}", status_html))
+
+        # Duration cell: "01:23 of 60:00"
+        duration_html = _format_elapsed_of_total(out_time, duration)
+        patches.append((f"#stream-duration-{name.replace(' ', '_')}", duration_html))
+
+    return patches
+
+
+async def sse_stream_health(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """SSE endpoint: pushes real-time ffmpeg stats into stream table cells.
+
+    Polls the stats version counter every second. When new stats arrive,
+    individual Status and Duration cells are patched via Datastar.
+    """
+
+    async def event_generator():
+        last_version = get_stats_version()
+        last_send = time.time()
+        try:
+            while not _shutting_down and not await request.is_disconnected():
+                current_version = get_stats_version()
+                now = time.time()
+
+                if current_version != last_version:
+                    last_version = current_version
+                    stats = get_stream_stats()
+                    active = get_active_streams()
+                    patches = _render_stream_health_patches(stats, active)
+                    for selector, html in patches:
+                        yield SSE.patch_elements(
+                            html, selector=selector, mode=ElementPatchMode.INNER
+                        )
+                    last_send = now
+                elif now - last_send > 30:
+                    yield ": keepalive\n\n"
+                    last_send = now
+
+                # Poll every second for responsive stats updates
+                for _ in range(5):
                     if _shutting_down:
                         return
                     await asyncio.sleep(0.2)

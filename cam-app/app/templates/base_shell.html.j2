@@ -56,10 +56,6 @@
         <div class="container-fluid">
             <a class="navbar-brand" href="/">FieldCam</a>
             {% if user %}
-            <div class="navbar-nav">
-                <a class="nav-link" href="#" role="button" data-on:click="evt.preventDefault(); $showScheduleModal = true">Schedule</a>
-                <a class="nav-link" href="#" role="button" data-on:click="evt.preventDefault(); $showHistoryModal = true; @get('/fragment/history')">History</a>
-            </div>
             <div class="navbar-nav ms-auto align-items-center gap-2">
                 {% if user.is_admin %}
                 <a href="#" class="btn btn-outline-warning btn-sm py-1 px-2" title="Settings" aria-label="Settings"
@@ -81,6 +77,8 @@
         {{ page_content | safe }}
     </main>
 
+    <footer class="text-center text-muted small py-3" style="opacity:0.4">{{ app_version | default('dev') }}<br>Uptime: {{ app_uptime | default('—') }}</footer>
+
     <!-- Schedule modal: Datastar signal-driven -->
     <div class="modal-backdrop" style="opacity:0.5; display:none" data-show="$showScheduleModal" data-on:click="$showScheduleModal = false"></div>
     <div id="schedule-modal" class="modal" data-class:d-block="$showScheduleModal"
@@ -89,7 +87,7 @@
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addModalTitle">Schedule A New Stream</h5>
+                    <h5 class="modal-title" id="addModalTitle">Schedule Stream</h5>
                     <button type="button" class="btn-close" aria-label="Close" data-on:click="$showScheduleModal = false"></button>
                 </div>
                 <div class="modal-body" id="add-form-container">

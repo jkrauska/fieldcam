@@ -33,6 +33,7 @@ from .routes import (
     settings_fragment,
     signal_shutdown,
     sse_list,
+    sse_stream_health,
     submit_job,
 )
 from .scheduler import start_cleanup_task
@@ -132,6 +133,12 @@ async def root(request: Request, user=Depends(login_manager)):  # noqa: B008
     return await list_jobs_page(request, user)
 
 
+@app.get("/list")
+def list_redirect():
+    """Redirect legacy /list URL to the SPA root."""
+    return RedirectResponse(url="/", status_code=302)
+
+
 @app.get("/dynamic/field.jpg")
 def dynamic_field_image(user=Depends(login_manager)):  # noqa: B008
     """Serve field camera image without caching (auth required)."""
@@ -172,3 +179,4 @@ app.get("/fragment/history", response_class=HTMLResponse)(history_fragment)
 app.get("/fragment/settings", response_class=HTMLResponse)(settings_fragment)
 app.post("/settings/save", response_class=HTMLResponse)(save_settings)
 app.get("/sse/list")(sse_list)
+app.get("/sse/stream-health")(sse_stream_health)
