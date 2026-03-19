@@ -46,13 +46,25 @@ if [[ "$1" == "now" ]]; then
     build_image
 fi
 
+DEBOUNCE_SECONDS=60
+
 while true; do
     echo "waiting for changes"
     inotifywait --recursive --event modify,create,delete \
         --exclude '.*\.jpg$' \
         "$DIRECTORY_TO_WATCH"
 
-    echo "Change detected in directory '$DIRECTORY_TO_WATCH'."
+    echo "Change detected — debouncing for ${DEBOUNCE_SECONDS}s..."
+
+    # Keep resetting the timer while changes keep arriving
+    while inotifywait --recursive --event modify,create,delete \
+        --exclude '.*\.jpg$' \
+        --timeout "$DEBOUNCE_SECONDS" \
+        "$DIRECTORY_TO_WATCH"; do
+        echo "More changes detected — restarting ${DEBOUNCE_SECONDS}s timer..."
+    done
+
+    echo "No changes for ${DEBOUNCE_SECONDS}s — rebuilding."
     build_image
 
 done

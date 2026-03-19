@@ -14,6 +14,16 @@ TARGET_CLASSES: dict[int, str] = {
 
 DEFAULT_MODEL = "yolov8n.pt"
 
+_model_cache: dict[str, object] = {}
+
+
+def _get_model(model_name: str):
+    """Return a cached YOLO model instance, loading from disk only once per model name."""
+    if model_name not in _model_cache:
+        from ultralytics import YOLO
+        _model_cache[model_name] = YOLO(model_name)
+    return _model_cache[model_name]
+
 
 def detect_objects(
     image_path: str | Path | None = None,
@@ -35,7 +45,7 @@ def detect_objects(
           - error: str (only present on failure)
     """
     try:
-        from ultralytics import YOLO
+        from ultralytics import YOLO  # noqa: F401
     except ImportError as e:
         logging.warning("ultralytics not installed: %s", e)
         return {
@@ -57,7 +67,7 @@ def detect_objects(
         }
 
     try:
-        model = YOLO(model_name)
+        model = _get_model(model_name)
         cpu_before = time.process_time()
         wall_before = time.monotonic()
         load_before = os.getloadavg()

@@ -189,6 +189,28 @@ def remove_stream(job_name: str):
         session.close()
 
 
+def delete_stream_by_id(stream_id: int) -> bool:
+    """Delete a single stream history entry by its primary key.
+
+    Returns True if a row was deleted, False if not found.
+    """
+    session = SessionLocal()
+    try:
+        stream = session.query(ActiveStream).filter(ActiveStream.id == stream_id).first()
+        if not stream:
+            return False
+        session.delete(stream)
+        session.commit()
+        logging.info(f"Deleted stream history entry id={stream_id} ({stream.job_name})")
+        return True
+    except Exception as e:
+        session.rollback()
+        logging.error(f"Error deleting stream id={stream_id}: {e}")
+        raise
+    finally:
+        session.close()
+
+
 def cleanup_stale_streams():
     """
     Check all running streams and update status if process is dead.

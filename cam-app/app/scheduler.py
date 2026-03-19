@@ -129,9 +129,14 @@ def start_cleanup_task():
         name="HIDDEN_snapshot_field",
         replace_existing=True,
     )
-    # Take one immediately at startup
+    # Take one immediately at startup, then warm the detection cache
     snapshot_field_image()
     logging.info("Started field snapshot task (every 60s)")
+
+    import threading
+    from .routes import _refresh_detection_cache
+    threading.Thread(target=_refresh_detection_cache, daemon=True).start()
+    logging.info("Kicked off background detection cache warm-up")
 
 
 def cancel_stream(job_name: str):

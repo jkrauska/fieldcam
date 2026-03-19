@@ -11,6 +11,7 @@
                 <th scope="col">Key</th>
                 <th scope="col">PID</th>
                 <th scope="col">Error</th>
+                {% if is_admin %}<th scope="col"></th>{% endif %}
             </tr>
         </thead>
         <tbody>
@@ -53,10 +54,22 @@
                     </span>
                     {% else %}-{% endif %}
                 </td>
+                {% if is_admin %}
+                <td align="center">
+                    <form onsubmit="event.preventDefault()">
+                        <input type="hidden" name="id" value="{{ stream.id }}">
+                        <button type="button" style="border: none; background: none; cursor: pointer;"
+                            title="Delete history entry"
+                            data-on:click="@post('/delete_history', {contentType: 'form'})">
+                            <i class="bi bi-trash text-danger" aria-hidden="true"></i>
+                        </button>
+                    </form>
+                </td>
+                {% endif %}
             </tr>
             {% if stream.error_message %}
             <tr style="display:none">
-                <td colspan="8">
+                <td colspan="{{ 9 if is_admin else 8 }}">
                     <div class="alert alert-danger mb-0 py-2 px-3" style="font-size:0.85em">
                         <strong>Error:</strong> {{ stream.error_message }}
                     </div>

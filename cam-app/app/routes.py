@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -15,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.templating import Jinja2Templates
 
 from .config import LOCAL_TZ, _ENV_FILE, login_manager, settings
-from .database import get_active_streams, get_all_streams
+from .database import delete_stream_by_id, get_active_streams, get_all_streams
 from .event_bus import get_list_version, get_stats_version, get_stream_stats, notify_list_changed
 from .scheduler import cancel_stream, get_scheduled_jobs, new_stream, remove_job
 from .yolo_check import detect_objects
@@ -71,25 +72,33 @@ templates.env.filters["datetime"] = format_datetime
 templates.env.filters["clean_name"] = clean_job_name
 
 
+_PLACEHOLDER_IMAGE = Path(__file__).resolve().parent / "static" / "placeholder_field.jpg"
+
+
 def serve_field_image():
-    """Serve the field camera image with no-cache headers (reads from field_image_path, e.g. /tmp/field.jpg)."""
+    """Serve the field camera image, falling back to a placeholder if missing/corrupt."""
     file_path = Path(settings.field_image_path)
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="Field image not available")
-    headers = {
-        "Cache-Control": "no-store"  # Disable caching
-    }
-    return FileResponse(str(file_path), media_type="image/jpeg", headers=headers)
+    if file_path.is_file() and file_path.stat().st_size > 0:
+        return FileResponse(
+            str(file_path),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-store"},
+        )
+    return FileResponse(
+        str(_PLACEHOLDER_IMAGE),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 _detection_cache: dict = {"text": "\u2014", "expires": 0.0}
 _DETECTION_TTL = 60
+_detection_refresh_lock = threading.Lock()
 
 
-def _get_detection_text() -> str:
-    """Return object detection summary as display text, cached for 60 seconds."""
-    now = time.time()
-    if now > _detection_cache["expires"]:
+def _refresh_detection_cache():
+    """Run YOLO detection and update the cache (called from a background thread)."""
+    try:
         result = detect_objects(image_path=settings.field_image_path, model_name=settings.yolo_model)
         counts = result.get("counts")
         if counts:
@@ -98,8 +107,35 @@ def _get_detection_text() -> str:
             _detection_cache["text"] = ", ".join(parts) if parts else "0"
         else:
             _detection_cache["text"] = "\u2014"
-        _detection_cache["expires"] = now + _DETECTION_TTL
+        _detection_cache["expires"] = time.time() + _DETECTION_TTL
+    except Exception:
+        logging.exception("Background detection refresh failed")
+
+
+def _get_detection_text() -> str:
+    """Return cached detection text, never blocking the request.
+
+    When the cache is stale, a background thread is spawned to refresh it.
+    The first call ever returns the default placeholder until the background
+    refresh completes.
+    """
+    if time.time() > _detection_cache["expires"]:
+        if _detection_refresh_lock.acquire(blocking=False):
+            try:
+                threading.Thread(
+                    target=_do_detection_refresh, daemon=True
+                ).start()
+            except Exception:
+                _detection_refresh_lock.release()
     return _detection_cache["text"]
+
+
+def _do_detection_refresh():
+    """Thread target: refresh cache then release the lock."""
+    try:
+        _refresh_detection_cache()
+    finally:
+        _detection_refresh_lock.release()
 
 
 def _list_context(request: Request):
@@ -164,12 +200,13 @@ def _render_add_fragment(request: Request) -> str:
     )
 
 
-def _render_list_all_fragment(request: Request, streams, field_name: str) -> str:
+def _render_list_all_fragment(request: Request, streams, field_name: str, user=None) -> str:
     """Render the list_all content fragment for SPA."""
     return templates.env.get_template("_list_all_content.html.j2").render(
         request=request,
         streams=streams,
         field_name=field_name,
+        is_admin=user and user.get("is_admin", False),
     )
 
 
@@ -383,8 +420,37 @@ async def history_fragment(request: Request, user=Depends(login_manager)):  # no
             utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
             local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
             stream.start_time_local = local_time
-    html = _render_list_all_fragment(request, all_streams, settings.location)
+    html = _render_list_all_fragment(request, all_streams, settings.location, user=user)
     return _fragment_response(html, selector="#history-modal-body", mode="inner")
+
+
+async def delete_history_entry(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """Delete a single stream history entry (admin only)."""
+    _require_admin(user)
+    form = await request.form()
+    stream_id = form.get("id")
+    if not stream_id:
+        raise HTTPException(status_code=400, detail="Missing stream id")
+
+    try:
+        deleted = delete_stream_by_id(int(stream_id))
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail="Invalid stream id") from e
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Stream entry not found")
+
+    all_streams = get_all_streams()
+    for stream in all_streams:
+        if stream.start_time:
+            utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
+            local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
+            stream.start_time_local = local_time
+    html = _render_list_all_fragment(request, all_streams, settings.location, user=user)
+    return DatastarResponse([
+        SSE.patch_elements(html, selector="#history-modal-body", mode=ElementPatchMode.INNER),
+        _make_toast_event("History entry removed"),
+    ])
 
 
 async def detection_api(user=Depends(login_manager)):  # noqa: B008
