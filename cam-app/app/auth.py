@@ -106,6 +106,9 @@ def handle_logout(response: Response) -> RedirectResponse:
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Handle HTTP exceptions. 401: return SPA shell with login form (no redirect, URL unchanged)."""
     if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+        accept = request.headers.get("accept", "")
+        if "text/html" not in accept:
+            return Response(status_code=401)
         next_url = request.url.path or "/"
         if not isinstance(next_url, str) or len(next_url) <= 1:
             next_url = "/"

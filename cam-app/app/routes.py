@@ -162,6 +162,7 @@ def _list_context(request: Request):
         "active_streams": active_streams,
         "field_name": settings.location,
         "detection_text": _get_detection_text(),
+        "cache_bust": int(time.time()),
     }
 
 
