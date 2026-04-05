@@ -100,6 +100,16 @@ templates.env.filters["clean_name"] = clean_job_name
 
 _PLACEHOLDER_IMAGE = Path(__file__).resolve().parent / "static" / "placeholder_field.jpg"
 
+_PLACEHOLDER_SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">'
+    b'<rect width="100%" height="100%" fill="#23272b"/>'
+    b'<text x="50%" y="48%" text-anchor="middle" fill="#aaa" font-size="22" font-family="sans-serif">'
+    b"Camera image unavailable</text>"
+    b'<text x="50%" y="58%" text-anchor="middle" fill="#666" font-size="14" font-family="sans-serif">'
+    b"Waiting for snapshot\u2026</text>"
+    b"</svg>"
+)
+
 
 def serve_field_image():
     """Serve the field camera image, falling back to a placeholder if missing/corrupt."""
@@ -110,9 +120,17 @@ def serve_field_image():
             media_type="image/jpeg",
             headers={"Cache-Control": "no-store"},
         )
-    return FileResponse(
-        str(_PLACEHOLDER_IMAGE),
-        media_type="image/jpeg",
+    if _PLACEHOLDER_IMAGE.is_file():
+        return FileResponse(
+            str(_PLACEHOLDER_IMAGE),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-store, max-age=0"},
+        )
+    from fastapi.responses import Response
+
+    return Response(
+        content=_PLACEHOLDER_SVG,
+        media_type="image/svg+xml",
         headers={"Cache-Control": "no-store, max-age=0"},
     )
 
@@ -232,9 +250,9 @@ def _render_shell(
     now = datetime.now(tz=LOCAL_TZ)
     blackout = [t.strip() for t in settings.blackout_teams.split(",") if t.strip()]
     return templates.TemplateResponse(
+        request,
         "base_shell.html.j2",
         {
-            "request": request,
             "page_content": page_content,
             "page_title": page_title,
             "user": user,
@@ -366,7 +384,6 @@ async def submit_job(
         start_time=start_datetime_obj,
         duration=calculated_duration_seconds,
         key=stream_key,
-        config={},
         destination=destination,
         custom_url=custom_url,
     )

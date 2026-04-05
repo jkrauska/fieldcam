@@ -3,6 +3,7 @@
 import atexit
 import hashlib
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -10,6 +11,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi_login import LoginManager
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve .env relative to project root (cam-app), so it works regardless of CWD
@@ -74,7 +76,22 @@ class Settings(BaseSettings):
 
 
 # Initialize settings
-settings = Settings()
+try:
+    settings = Settings()
+except ValidationError as exc:
+    missing = [e["loc"][0] for e in exc.errors() if e["type"] == "missing"]
+    if missing:
+        env_hint = f"  cp {_ENV_FILE.with_suffix('.example').relative_to(_PROJECT_ROOT.parent)} {_ENV_FILE.relative_to(_PROJECT_ROOT.parent)}"
+        print(
+            "\n*** Missing required configuration ***\n"
+            f"  The following settings have no value: {', '.join(missing)}\n\n"
+            f"  Create a .env file from the template and fill in the values:\n"
+            f"    {env_hint}\n",
+            file=sys.stderr,
+        )
+    else:
+        print(f"\n*** Configuration error ***\n{exc}\n", file=sys.stderr)
+    sys.exit(1)
 
 
 def _resolve_jobs_db_url(url: str) -> str:
