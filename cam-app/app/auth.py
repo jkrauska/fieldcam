@@ -8,8 +8,8 @@ from collections import defaultdict
 from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from .config import login_manager, settings
 from . import routes
+from .config import login_manager, settings
 
 # --- Brute-force backoff state ---
 _fail_counts: dict[str, int] = defaultdict(int)

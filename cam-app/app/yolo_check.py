@@ -71,11 +71,11 @@ def detect_objects(
         cpu_before = time.process_time()
         wall_before = time.monotonic()
         load_before = os.getloadavg()
-        predict_kwargs: dict[str, Any] = dict(
-            source=str(path),
-            conf=conf_threshold,
-            verbose=False,
-        )
+        predict_kwargs: dict[str, Any] = {
+            "source": str(path),
+            "conf": conf_threshold,
+            "verbose": False,
+        }
         if not detect_all:
             predict_kwargs["classes"] = list(TARGET_CLASSES.keys())
         results = model.predict(**predict_kwargs)
@@ -92,7 +92,7 @@ def detect_objects(
             "error": str(e),
         }
 
-    counts: dict[str, int] = {} if detect_all else {name: 0 for name in TARGET_CLASSES.values()}
+    counts: dict[str, int] = {} if detect_all else dict.fromkeys(TARGET_CLASSES.values(), 0)
     details: list[dict[str, Any]] = []
     class_names = model.names  # COCO class name mapping from the model
 
@@ -104,7 +104,7 @@ def detect_objects(
             if boxes.conf is not None
             else [0.0] * len(classes)
         )
-        for cls_id, conf in zip(classes, confidences):
+        for cls_id, conf in zip(classes, confidences, strict=True):
             if detect_all:
                 name = class_names.get(cls_id, f"class_{cls_id}")
             else:

@@ -134,6 +134,7 @@ def start_cleanup_task():
     logging.info("Started field snapshot task (every 60s)")
 
     import threading
+
     from .routes import _refresh_detection_cache
     threading.Thread(target=_refresh_detection_cache, daemon=True).start()
     logging.info("Kicked off background detection cache warm-up")

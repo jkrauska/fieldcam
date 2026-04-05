@@ -14,17 +14,49 @@ dependencies = [
     "python-multipart",
     "sqlalchemy",
     "uvicorn[standard]",
+    "ruff",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "ruff",
     "pre-commit",
 ]
 # YOLO person detection (count people in field image)
 yolo = [
     "ultralytics>=8.0.0",
 ]
+
+[tool.ruff]
+line-length = 150
+target-version = "py311"
+exclude = [
+    ".git",
+    ".ruff_cache",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

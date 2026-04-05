@@ -23,11 +23,11 @@ from .routes import (
     add_job_page,
     cancel_stream_route,
     delete_history_entry,
+    detection_api,
+    detection_fragment,
     get_version,
     history_fragment,
     list_jobs_page,
-    detection_api,
-    detection_fragment,
     remove_job_route,
     save_settings,
     serve_field_image,
@@ -63,6 +63,7 @@ app = FastAPI()
 app.add_middleware(ProxyHeadersMiddleware)
 
 from .csrf import CSRFMiddleware  # noqa: E402
+
 app.add_middleware(CSRFMiddleware)
 
 # Mount static files

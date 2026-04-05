@@ -8,14 +8,14 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from datastar_py import ServerSentEventGenerator as SSE
+from datastar_py import ServerSentEventGenerator as SSE  # noqa: N814
 from datastar_py.consts import ElementPatchMode
 from datastar_py.fastapi import DatastarResponse
 from fastapi import Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .config import LOCAL_TZ, _ENV_FILE, login_manager, settings
+from .config import _ENV_FILE, LOCAL_TZ, login_manager, settings
 from .database import delete_stream_by_id, get_active_streams, get_all_streams
 from .event_bus import get_list_version, get_stats_version, get_stream_stats, notify_list_changed
 from .scheduler import cancel_stream, get_scheduled_jobs, new_stream, remove_job
