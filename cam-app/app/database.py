@@ -3,7 +3,7 @@
 import logging
 import os
 import signal
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, Integer, String, Text, create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -28,8 +28,8 @@ class ActiveStream(Base):
     destination = Column(String, default="gamechanger")
     status = Column(String, default="running")  # running, completed, cancelled, failed
     error_message = Column(Text)
-    created_at = Column(String, default=datetime.utcnow().isoformat())
-    updated_at = Column(String, default=datetime.utcnow().isoformat())
+    created_at = Column(String, default=lambda: datetime.now(UTC).isoformat())
+    updated_at = Column(String, default=lambda: datetime.now(UTC).isoformat())
 
 
 # Create engine and session (same resolved path as APScheduler in config)
@@ -56,7 +56,7 @@ def add_active_stream(job_name: str, pid: int, duration: int, stream_key: str = 
         stream = ActiveStream(
             job_name=job_name,
             pid=pid,
-            start_time=datetime.utcnow().isoformat(),
+            start_time=datetime.now(UTC).isoformat(),
             duration=duration,
             stream_key=stream_key,
             destination=destination,
@@ -141,7 +141,7 @@ def update_stream_status(job_name: str, status: str, error_message: str = None):
         stream = session.query(ActiveStream).filter(ActiveStream.job_name == job_name).first()
         if stream:
             stream.status = status
-            stream.updated_at = datetime.utcnow().isoformat()
+            stream.updated_at = datetime.now(UTC).isoformat()
             if error_message:
                 stream.error_message = error_message
             session.commit()
@@ -222,7 +222,7 @@ def cleanup_stale_streams():
                 # Process is dead
                 stream.status = "failed"
                 stream.error_message = "Process died unexpectedly"
-                stream.updated_at = datetime.utcnow().isoformat()
+                stream.updated_at = datetime.now(UTC).isoformat()
                 logging.warning(f"Stream {stream.job_name} (PID {stream.pid}) found dead, marked as failed")
 
         session.commit()

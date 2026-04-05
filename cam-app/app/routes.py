@@ -56,6 +56,22 @@ except Exception:
 _START_TIME = time.time()
 
 
+def _localize_stream_times(streams):
+    """Convert UTC start_time strings to local timezone on each stream object."""
+    for stream in streams:
+        if stream.start_time:
+            utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
+            stream.start_time_local = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
+
+
+def _format_detection_counts(counts: dict) -> str:
+    """Format YOLO detection counts dict into a human-readable string."""
+    if not counts:
+        return "\u2014"
+    parts = [f"{n} {name}{'s' if n != 1 else ''}" for name, n in counts.items() if n > 0]
+    return ", ".join(parts) if parts else "0"
+
+
 def _cpu_temp() -> str:
     """Return CPU temperature in °C, or '—' if unavailable."""
     try:
@@ -109,12 +125,7 @@ def _refresh_detection_cache():
     """Run YOLO detection and update the cache (called from a background thread)."""
     try:
         result = detect_objects(image_path=settings.field_image_path, model_name=settings.yolo_model)
-        counts = result.get("counts")
-        if counts:
-            parts = [f"{n} {name}{'s' if n != 1 else ''}" for name, n in counts.items() if n > 0]
-            _detection_cache["text"] = ", ".join(parts) if parts else "0"
-        else:
-            _detection_cache["text"] = "\u2014"
+        _detection_cache["text"] = _format_detection_counts(result.get("counts"))
         _detection_cache["expires"] = time.time() + _DETECTION_TTL
     except Exception:
         logging.exception("Background detection refresh failed")
@@ -148,11 +159,7 @@ def _list_context(request: Request):
     """Build context for list page / list-content fragment."""
     jobs = get_scheduled_jobs()
     active_streams = get_active_streams()
-    for stream in active_streams:
-        if stream.start_time:
-            utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
-            local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
-            stream.start_time_local = local_time
+    _localize_stream_times(active_streams)
     return {
         "request": request,
         "jobs": jobs,
@@ -418,11 +425,7 @@ async def cancel_stream_route(request: Request, user=Depends(login_manager)):  #
 async def history_fragment(request: Request, user=Depends(login_manager)):  # noqa: B008
     """Return stream history table as a fragment for the history modal."""
     all_streams = get_all_streams()
-    for stream in all_streams:
-        if stream.start_time:
-            utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
-            local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
-            stream.start_time_local = local_time
+    _localize_stream_times(all_streams)
     html = _render_list_all_fragment(request, all_streams, settings.location, user=user)
     return _fragment_response(html, selector="#history-modal-body", mode="inner")
 
@@ -444,11 +447,7 @@ async def delete_history_entry(request: Request, user=Depends(login_manager)):  
         raise HTTPException(status_code=404, detail="Stream entry not found")
 
     all_streams = get_all_streams()
-    for stream in all_streams:
-        if stream.start_time:
-            utc_time = datetime.fromisoformat(stream.start_time.replace("Z", "+00:00"))
-            local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
-            stream.start_time_local = local_time
+    _localize_stream_times(all_streams)
     html = _render_list_all_fragment(request, all_streams, settings.location, user=user)
     return DatastarResponse(
         [
@@ -476,12 +475,7 @@ async def detection_api(user=Depends(login_manager)):  # noqa: B008
 async def detection_fragment(user=Depends(login_manager)):  # noqa: B008
     """Return detection counts as an HTML fragment for Datastar to morph into #detections."""
     result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path)
-    counts = result.get("counts")
-    if counts:
-        parts = [f"{n} {name}{'s' if n != 1 else ''}" for name, n in counts.items() if n > 0]
-        text = ", ".join(parts) if parts else "0"
-    else:
-        text = "\u2014"
+    text = _format_detection_counts(result.get("counts"))
     html = f'Detections: <span aria-live="polite">{text}</span>'
     return _fragment_response(html, selector="#detections", mode="inner")
 
