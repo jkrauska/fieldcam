@@ -81,10 +81,7 @@ try:
 except ValidationError as exc:
     missing = [e["loc"][0] for e in exc.errors() if e["type"] == "missing"]
     if missing:
-        env_hint = (
-            f"  cp {_ENV_FILE.with_suffix('.example').relative_to(_PROJECT_ROOT.parent)} "
-            f"{_ENV_FILE.relative_to(_PROJECT_ROOT.parent)}"
-        )
+        env_hint = f"  cp {_ENV_FILE.with_suffix('.example').relative_to(_PROJECT_ROOT.parent)} {_ENV_FILE.relative_to(_PROJECT_ROOT.parent)}"
         print(
             "\n*** Missing required configuration ***\n"
             f"  The following settings have no value: {', '.join(missing)}\n\n"

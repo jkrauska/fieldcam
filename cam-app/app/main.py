@@ -61,6 +61,7 @@ def _override_uvicorn_loggers():
         _logger.addHandler(_handler)
         _logger.propagate = False
 
+
 # Initialize FastAPI app
 app = FastAPI()
 app.add_middleware(ProxyHeadersMiddleware)
