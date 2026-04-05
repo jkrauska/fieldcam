@@ -116,9 +116,11 @@ async def login(request: Request, response: Response):
 
     if is_datastar:
         from .routes import _make_toast_event
+
         return DatastarResponse(_make_toast_event("Incorrect password", "bg-danger"))
 
     from .routes import render_shell_with_login
+
     return render_shell_with_login(request, next_url, error="Incorrect password.")
 
 

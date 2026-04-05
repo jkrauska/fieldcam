@@ -111,8 +111,7 @@ def _refresh_detection_cache():
         result = detect_objects(image_path=settings.field_image_path, model_name=settings.yolo_model)
         counts = result.get("counts")
         if counts:
-            parts = [f"{n} {name}{'s' if n != 1 else ''}"
-                     for name, n in counts.items() if n > 0]
+            parts = [f"{n} {name}{'s' if n != 1 else ''}" for name, n in counts.items() if n > 0]
             _detection_cache["text"] = ", ".join(parts) if parts else "0"
         else:
             _detection_cache["text"] = "\u2014"
@@ -131,9 +130,7 @@ def _get_detection_text() -> str:
     if time.time() > _detection_cache["expires"]:
         if _detection_refresh_lock.acquire(blocking=False):
             try:
-                threading.Thread(
-                    target=_do_detection_refresh, daemon=True
-                ).start()
+                threading.Thread(target=_do_detection_refresh, daemon=True).start()
             except Exception:
                 _detection_refresh_lock.release()
     return _detection_cache["text"]
@@ -183,10 +180,7 @@ def _render_list_content_fragment(request: Request):
 
 def _is_fragment_request(request: Request) -> bool:
     """True when client wants only the main content fragment (SPA navigation)."""
-    return (
-        request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        or request.headers.get("Datastar-Request") == "true"
-    )
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.headers.get("Datastar-Request") == "true"
 
 
 def _fragment_response(content: str, selector: str = "#app-content", mode: str = "inner"):
@@ -372,11 +366,13 @@ async def submit_job(
 
     list_html = _render_list_inner(request)
     form_html = _render_add_fragment(request)
-    return DatastarResponse([
-        SSE.patch_elements(list_html, selector="#list-content", mode=ElementPatchMode.INNER),
-        SSE.patch_elements(form_html, selector="#add-form-container", mode=ElementPatchMode.INNER),
-        _make_toast_event("Stream scheduled"),
-    ])
+    return DatastarResponse(
+        [
+            SSE.patch_elements(list_html, selector="#list-content", mode=ElementPatchMode.INNER),
+            SSE.patch_elements(form_html, selector="#add-form-container", mode=ElementPatchMode.INNER),
+            _make_toast_event("Stream scheduled"),
+        ]
+    )
 
 
 async def remove_job_route(request: Request, user=Depends(login_manager)):  # noqa: B008
@@ -391,9 +387,7 @@ async def remove_job_route(request: Request, user=Depends(login_manager)):  # no
             remove_job(name)
             notify_list_changed()
             html = _render_list_inner(request)
-            return DatastarResponse(
-                SSE.patch_elements(html, selector="#list-content", mode=ElementPatchMode.INNER)
-            )
+            return DatastarResponse(SSE.patch_elements(html, selector="#list-content", mode=ElementPatchMode.INNER))
         except Exception as e:
             logging.error(f"Error removing job: {e}")
             raise HTTPException(status_code=404, detail=str(e)) from e
@@ -415,9 +409,7 @@ async def cancel_stream_route(request: Request, user=Depends(login_manager)):  #
                 logging.warning(f"Failed to cancel stream: {name}")
             notify_list_changed()
             html = _render_list_inner(request)
-            return DatastarResponse(
-                SSE.patch_elements(html, selector="#list-content", mode=ElementPatchMode.INNER)
-            )
+            return DatastarResponse(SSE.patch_elements(html, selector="#list-content", mode=ElementPatchMode.INNER))
         except Exception as e:
             logging.error(f"Error canceling stream: {e}")
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -458,10 +450,12 @@ async def delete_history_entry(request: Request, user=Depends(login_manager)):  
             local_time = utc_time.replace(tzinfo=None).astimezone(LOCAL_TZ)
             stream.start_time_local = local_time
     html = _render_list_all_fragment(request, all_streams, settings.location, user=user)
-    return DatastarResponse([
-        SSE.patch_elements(html, selector="#history-modal-body", mode=ElementPatchMode.INNER),
-        _make_toast_event("History entry removed"),
-    ])
+    return DatastarResponse(
+        [
+            SSE.patch_elements(html, selector="#history-modal-body", mode=ElementPatchMode.INNER),
+            _make_toast_event("History entry removed"),
+        ]
+    )
 
 
 async def detection_api(user=Depends(login_manager)):  # noqa: B008
@@ -484,8 +478,7 @@ async def detection_fragment(user=Depends(login_manager)):  # noqa: B008
     result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path)
     counts = result.get("counts")
     if counts:
-        parts = [f"{n} {name}{'s' if n != 1 else ''}"
-                 for name, n in counts.items() if n > 0]
+        parts = [f"{n} {name}{'s' if n != 1 else ''}" for name, n in counts.items() if n > 0]
         text = ", ".join(parts) if parts else "0"
     else:
         text = "\u2014"
@@ -524,9 +517,7 @@ async def sse_list(request: Request, user=Depends(login_manager)):  # noqa: B008
                 if current_version != last_version:
                     last_version = current_version
                     content = _render_list_inner(request)
-                    yield SSE.patch_elements(
-                        content, selector="#list-content", mode=ElementPatchMode.INNER
-                    )
+                    yield SSE.patch_elements(content, selector="#list-content", mode=ElementPatchMode.INNER)
                     last_send = now
                 elif now - last_send > 30:
                     yield ": keepalive\n\n"
@@ -587,10 +578,7 @@ def _render_stream_health_patches(stats: dict[str, dict], active_streams) -> lis
 
         # Status cell: "LIVE 4Mb/s"
         rate_text = f" {bitrate}" if bitrate else ""
-        status_html = (
-            f'<span class="badge bg-success">'
-            f'<i class="bi bi-broadcast-pin"></i> LIVE{rate_text}</span>'
-        )
+        status_html = f'<span class="badge bg-success"><i class="bi bi-broadcast-pin"></i> LIVE{rate_text}</span>'
         patches.append((f"#stream-status-{name.replace(' ', '_')}", status_html))
 
         # Duration cell: "01:23 of 60:00"
@@ -621,9 +609,7 @@ async def sse_stream_health(request: Request, user=Depends(login_manager)):  # n
                     active = get_active_streams()
                     patches = _render_stream_health_patches(stats, active)
                     for selector, html in patches:
-                        yield SSE.patch_elements(
-                            html, selector=selector, mode=ElementPatchMode.INNER
-                        )
+                        yield SSE.patch_elements(html, selector=selector, mode=ElementPatchMode.INNER)
                     last_send = now
                 elif now - last_send > 30:
                     yield ": keepalive\n\n"
@@ -649,35 +635,59 @@ def _require_admin(user):
 # --- Editable .env settings definition ---
 # Each group: (label, caution, [(env_key, display_label, input_type)])
 _SETTINGS_GROUPS = [
-    ("Application", False, [
-        ("LOCATION", "Location name", "text"),
-        ("BLACKOUT_SEASON", "Blackout season", "text"),
-        ("BLACKOUT_TEAMS", "Blackout teams (comma-separated)", "text"),
-        ("TIMEZONE", "Timezone", "text"),
-        ("TOKEN_EXPIRY_MINUTES", "Token expiry (minutes)", "number"),
-    ]),
-    ("Authentication", False, [
-        ("PASSWORDS", "Passwords (comma-separated)", "text"),
-        ("ADMIN_PASSWORD", "Admin password", "text"),
-    ]),
-    ("Camera", True, [
-        ("CAM_HOST", "Camera IP", "text"),
-        ("CAM_USER", "Camera username", "text"),
-        ("CAM_PASS", "Camera password", "text"),
-    ]),
-    ("Streaming", False, [
-        ("RTMP_GAMECHANGER", "RTMP GameChanger URL", "text"),
-        ("RTMP_YOUTUBE", "RTMP YouTube URL", "text"),
-    ]),
-    ("Security", True, [
-        ("SECRET_KEY", "Secret key", "text"),
-        ("COOKIE_NAME", "Cookie name", "text"),
-    ]),
-    ("Advanced", False, [
-        ("JOBS_DB_PATH", "Jobs DB path", "text"),
-        ("FIELD_IMAGE_PATH", "Field image path", "text"),
-        ("YOLO_MODEL", "YOLO model", "text"),
-    ]),
+    (
+        "Application",
+        False,
+        [
+            ("LOCATION", "Location name", "text"),
+            ("BLACKOUT_SEASON", "Blackout season", "text"),
+            ("BLACKOUT_TEAMS", "Blackout teams (comma-separated)", "text"),
+            ("TIMEZONE", "Timezone", "text"),
+            ("TOKEN_EXPIRY_MINUTES", "Token expiry (minutes)", "number"),
+        ],
+    ),
+    (
+        "Authentication",
+        False,
+        [
+            ("PASSWORDS", "Passwords (comma-separated)", "text"),
+            ("ADMIN_PASSWORD", "Admin password", "text"),
+        ],
+    ),
+    (
+        "Camera",
+        True,
+        [
+            ("CAM_HOST", "Camera IP", "text"),
+            ("CAM_USER", "Camera username", "text"),
+            ("CAM_PASS", "Camera password", "text"),
+        ],
+    ),
+    (
+        "Streaming",
+        False,
+        [
+            ("RTMP_GAMECHANGER", "RTMP GameChanger URL", "text"),
+            ("RTMP_YOUTUBE", "RTMP YouTube URL", "text"),
+        ],
+    ),
+    (
+        "Security",
+        True,
+        [
+            ("SECRET_KEY", "Secret key", "text"),
+            ("COOKIE_NAME", "Cookie name", "text"),
+        ],
+    ),
+    (
+        "Advanced",
+        False,
+        [
+            ("JOBS_DB_PATH", "Jobs DB path", "text"),
+            ("FIELD_IMAGE_PATH", "Field image path", "text"),
+            ("YOLO_MODEL", "YOLO model", "text"),
+        ],
+    ),
 ]
 
 
@@ -750,11 +760,13 @@ async def save_settings(request: Request, user=Depends(login_manager)):  # noqa:
     Path(__file__).touch()
 
     # Close modal, show toast, and reload page after server has restarted
-    return DatastarResponse([
-        SSE.patch_signals({"showSettingsModal": False}),
-        _make_toast_event("Settings saved — restarting...", "bg-success"),
-        SSE.execute_script("setTimeout(() => window.location.reload(), 5000)"),
-    ])
+    return DatastarResponse(
+        [
+            SSE.patch_signals({"showSettingsModal": False}),
+            _make_toast_event("Settings saved — restarting...", "bg-success"),
+            SSE.execute_script("setTimeout(() => window.location.reload(), 5000)"),
+        ]
+    )
 
 
 def get_version():
@@ -776,9 +788,7 @@ def get_version():
 
             # Add short commit hash
             git_commit = version_data.get("git_commit", "unknown")
-            version_data["git_commit_short"] = (
-                git_commit[:7] if git_commit != "unknown" else "unknown"
-            )
+            version_data["git_commit_short"] = git_commit[:7] if git_commit != "unknown" else "unknown"
 
             return JSONResponse(content=version_data)
         else:

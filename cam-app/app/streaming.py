@@ -31,16 +31,24 @@ def snapshot_field_image():
     tmp = output + ".tmp"
     cmd = [
         "/usr/bin/ffmpeg",
-        "-hide_banner", "-loglevel", "error", "-y",
-        "-rtsp_transport", "tcp",
-        "-i", _snapshot_cam_url(),
-        "-frames:v", "1", "-q:v", "2",
-        "-f", "image2",  # force format since .tmp extension is ambiguous
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-rtsp_transport",
+        "tcp",
+        "-i",
+        _snapshot_cam_url(),
+        "-frames:v",
+        "1",
+        "-q:v",
+        "2",
+        "-f",
+        "image2",  # force format since .tmp extension is ambiguous
         tmp,
     ]
     try:
-        subprocess.run(cmd, timeout=15, check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        subprocess.run(cmd, timeout=15, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         os.replace(tmp, output)  # atomic rename
     except subprocess.TimeoutExpired:
         logging.warning("Field snapshot timed out")
@@ -87,9 +95,7 @@ def _parse_progress(block: dict[str, str]) -> dict:
     }
 
 
-def stream_game(
-    duration=(60 * 4), key="", config=None, name="", destination="gamechanger", custom_url=""
-):
+def stream_game(duration=(60 * 4), key="", config=None, name="", destination="gamechanger", custom_url=""):
     """
     Stream a game from the camera to an RTMP destination.
 
@@ -156,8 +162,11 @@ def stream_game(
     # Register stream in database immediately after starting
     try:
         add_active_stream(
-            job_name=name, pid=process.pid, duration=duration,
-            stream_key=key, destination=destination,
+            job_name=name,
+            pid=process.pid,
+            duration=duration,
+            stream_key=key,
+            destination=destination,
         )
     except Exception as e:
         logging.error(f"Failed to register stream in database: {e}")

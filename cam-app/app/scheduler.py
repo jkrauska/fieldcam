@@ -12,8 +12,13 @@ from .streaming import snapshot_field_image, stream_game
 
 
 def new_stream(
-    name="", start_time=False, duration=60 * 5, key="", config=None,
-    destination="gamechanger", custom_url="",
+    name="",
+    start_time=False,
+    duration=60 * 5,
+    key="",
+    config=None,
+    destination="gamechanger",
+    custom_url="",
 ):
     """
     Schedule a new stream job.
@@ -136,6 +141,7 @@ def start_cleanup_task():
     import threading
 
     from .routes import _refresh_detection_cache
+
     threading.Thread(target=_refresh_detection_cache, daemon=True).start()
     logging.info("Kicked off background detection cache warm-up")
 

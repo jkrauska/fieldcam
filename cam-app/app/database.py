@@ -42,18 +42,14 @@ def init_db():
     Base.metadata.create_all(engine)
     with engine.connect() as conn:
         try:
-            conn.execute(
-                text("ALTER TABLE active_streams ADD COLUMN destination TEXT DEFAULT 'gamechanger'")
-            )
+            conn.execute(text("ALTER TABLE active_streams ADD COLUMN destination TEXT DEFAULT 'gamechanger'"))
             conn.commit()
         except Exception:
             pass
     logging.info("Database initialized - active_streams table ready")
 
 
-def add_active_stream(
-    job_name: str, pid: int, duration: int, stream_key: str = "", destination: str = "gamechanger"
-):
+def add_active_stream(job_name: str, pid: int, duration: int, stream_key: str = "", destination: str = "gamechanger"):
     """Register a new active stream in the database."""
     session = SessionLocal()
     try:
@@ -87,11 +83,7 @@ def get_active_streams():
     """
     session = SessionLocal()
     try:
-        streams = (
-            session.query(ActiveStream)
-            .filter(ActiveStream.status.in_(["running", "pending"]))
-            .all()
-        )
+        streams = session.query(ActiveStream).filter(ActiveStream.status.in_(["running", "pending"])).all()
         # Detach from session to avoid issues after session closes
         session.expunge_all()
         return streams
@@ -231,9 +223,7 @@ def cleanup_stale_streams():
                 stream.status = "failed"
                 stream.error_message = "Process died unexpectedly"
                 stream.updated_at = datetime.utcnow().isoformat()
-                logging.warning(
-                    f"Stream {stream.job_name} (PID {stream.pid}) found dead, marked as failed"
-                )
+                logging.warning(f"Stream {stream.job_name} (PID {stream.pid}) found dead, marked as failed")
 
         session.commit()
         notify_list_changed()

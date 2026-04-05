@@ -21,6 +21,7 @@ def _get_model(model_name: str):
     """Return a cached YOLO model instance, loading from disk only once per model name."""
     if model_name not in _model_cache:
         from ultralytics import YOLO
+
         _model_cache[model_name] = YOLO(model_name)
     return _model_cache[model_name]
 
@@ -99,11 +100,7 @@ def detect_objects(
     if results and results[0].boxes is not None and results[0].boxes.cls is not None:
         boxes = results[0].boxes
         classes = boxes.cls.int().tolist()
-        confidences = (
-            boxes.conf.float().tolist()
-            if boxes.conf is not None
-            else [0.0] * len(classes)
-        )
+        confidences = boxes.conf.float().tolist() if boxes.conf is not None else [0.0] * len(classes)
         for cls_id, conf in zip(classes, confidences, strict=True):
             if detect_all:
                 name = class_names.get(cls_id, f"class_{cls_id}")
@@ -144,7 +141,7 @@ if __name__ == "__main__":
         idx = args.index("--model")
         if idx + 1 < len(args):
             model = args[idx + 1]
-            args = args[:idx] + args[idx + 2:]
+            args = args[:idx] + args[idx + 2 :]
         else:
             print("--model requires a value", file=sys.stderr)
             sys.exit(1)
@@ -156,6 +153,7 @@ if __name__ == "__main__":
     if path is None:
         try:
             from .config import settings
+
             path = settings.field_image_path
         except Exception:
             print("Usage: python -m app.yolo_check [image_path] [-v] [--all] [--model models/yolov8s.pt]", file=sys.stderr)
@@ -167,6 +165,7 @@ if __name__ == "__main__":
         sys.exit(2)
     if "-v" in flags:
         import json
+
         print(json.dumps(result, indent=2))
     else:
         for name, n in sorted(result["counts"].items(), key=lambda x: -x[1]):
