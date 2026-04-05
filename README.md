@@ -91,8 +91,10 @@ crontab -e
 Add this line (adjust credentials and IP address):
 
 ```cron
-* * * * * /usr/bin/ffmpeg -hide_banner -loglevel error -y -i rtsp://USERNAME:PASSWORD@IPADDRESS:554/Streaming/channels/102/ -frames:v 1 -q:v 2 /home/stream411/fieldcam/cam-app/app/static/field.jpg
+* * * * * /usr/bin/ffmpeg -hide_banner -loglevel error -y -i rtsp://USERNAME:PASSWORD@IPADDRESS:554/Streaming/channels/102/ -frames:v 1 -q:v 2 /tmp/field.jpg
 ```
+
+The app serves this file at `/dynamic/field.jpg` (configurable via `field_image_path`, default `/tmp/field.jpg`). Using `/tmp` lets the cron job write the image where any user can read it.
 
 ## Project Structure
 
@@ -111,8 +113,8 @@ fieldcam/
 │   │   ├── static/          # Static files (images, favicon)
 │   │   └── templates/       # Jinja2 templates
 │   ├── Dockerfile           # Container definition
-│   ├── requirements.txt     # Python dependencies
-│   └── build.sh            # Docker build script
+│   ├── pyproject.toml       # Project config and Python dependencies (uv)
+│   └── build.sh             # Docker build script
 ├── jobs/                    # SQLite database storage
 ├── logs/                    # Application logs
 ├── docker-compose.yml       # Docker Compose configuration
@@ -184,17 +186,11 @@ source $HOME/.local/bin/env
 # Navigate to the cam-app directory
 cd cam-app
 
-# Create a virtual environment with uv
-uv venv
+# Create a virtual environment and install all dependencies (prod + dev) with uv
+uv sync --all-extras
 
-# Activate the virtual environment
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install production dependencies
-uv pip install -r requirements.txt
-
-# Install development dependencies (includes ruff and pre-commit)
-uv pip install -r requirements-dev.txt
+# Activate the virtual environment (optional; uv run uses it automatically)
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install pre-commit hooks (for automatic linting/formatting)
 pre-commit install
@@ -203,9 +199,9 @@ pre-commit install
 #### Running the Application Locally
 
 ```bash
-# Make sure you're in the cam-app directory with venv activated
+# From the cam-app directory (uv uses .venv from pyproject.toml)
 cd cam-app
-uvicorn app.main:app --reload --port 9090
+uv run uvicorn app.main:app --reload --port 9090
 ```
 
 ### Code Quality Tools
@@ -259,7 +255,17 @@ See `.github/workflows/lint.yml` for the workflow configuration.
 - **SQLAlchemy** - Database ORM
 - **Jinja2** - Template engine
 - **FastAPI-Login** - Authentication
+- **Data-Star** - Lightweight hypermedia frontend (CDN script, no npm); backend-driven UI with HTML patch responses
 - **Docker** - Containerization
+
+### Data-Star integration
+
+The list and add pages use [Data-Star](https://data-star.dev/) so that actions (remove job, cancel stream, submit new stream) update the page via **HTML morphing** instead of full reloads:
+
+- **List page** (`/list`): Remove and Cancel buttons submit via `@post(..., {contentType: 'form'})`. The server returns an HTML fragment for `#list-content`, which Data-Star morphs into the DOM.
+- **Add page** (`/add`): The form uses `data-on:submit="@post('/submit', {contentType: 'form'})"`. On success the server returns a fragment for `#add-form-container` (success message + link back to list).
+
+No frontend build step or Data-Star SDK is required; the client loads the Data-Star script from the CDN, and the backend returns plain HTML fragments with the expected element IDs.
 
 ### Building the Docker Image
 

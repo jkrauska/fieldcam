@@ -5,10 +5,11 @@ import os
 import signal
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Text, create_engine
+from sqlalchemy import Column, Integer, String, Text, create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from .config import settings
+from .config import JOBS_DB_URL
+from .event_bus import notify_list_changed
 
 Base = declarative_base()
 
@@ -24,35 +25,32 @@ class ActiveStream(Base):
     start_time = Column(String, nullable=False)  # ISO format timestamp
     duration = Column(Integer, nullable=False)
     stream_key = Column(String)
+    destination = Column(String, default="gamechanger")
     status = Column(String, default="running")  # running, completed, cancelled, failed
     error_message = Column(Text)
     created_at = Column(String, default=datetime.utcnow().isoformat())
     updated_at = Column(String, default=datetime.utcnow().isoformat())
 
 
-# Create engine and session
-# Use the same database path as APScheduler
-db_path = settings.jobs_db_path.replace("sqlite:///", "")
-engine = create_engine(f"sqlite:///{db_path}")
+# Create engine and session (same resolved path as APScheduler in config)
+engine = create_engine(JOBS_DB_URL)
 SessionLocal = sessionmaker(bind=engine)
 
 
 def init_db():
     """Initialize database and create tables if they don't exist."""
     Base.metadata.create_all(engine)
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE active_streams ADD COLUMN destination TEXT DEFAULT 'gamechanger'"))
+            conn.commit()
+        except Exception:
+            pass
     logging.info("Database initialized - active_streams table ready")
 
 
-def add_active_stream(job_name: str, pid: int, duration: int, stream_key: str = ""):
-    """
-    Register a new active stream in the database.
-
-    Args:
-        job_name: Name of the stream job
-        pid: Process ID of the FFmpeg process
-        duration: Duration in seconds
-        stream_key: GameChanger stream key
-    """
+def add_active_stream(job_name: str, pid: int, duration: int, stream_key: str = "", destination: str = "gamechanger"):
+    """Register a new active stream in the database."""
     session = SessionLocal()
     try:
         stream = ActiveStream(
@@ -61,10 +59,12 @@ def add_active_stream(job_name: str, pid: int, duration: int, stream_key: str = 
             start_time=datetime.utcnow().isoformat(),
             duration=duration,
             stream_key=stream_key,
+            destination=destination,
             status="running",
         )
         session.add(stream)
         session.commit()
+        notify_list_changed()
         logging.info(f"Added active stream: {job_name} (PID: {pid})")
     except Exception as e:
         session.rollback()
@@ -83,11 +83,7 @@ def get_active_streams():
     """
     session = SessionLocal()
     try:
-        streams = (
-            session.query(ActiveStream)
-            .filter(ActiveStream.status.in_(["running", "pending"]))
-            .all()
-        )
+        streams = session.query(ActiveStream).filter(ActiveStream.status.in_(["running", "pending"])).all()
         # Detach from session to avoid issues after session closes
         session.expunge_all()
         return streams
@@ -104,7 +100,7 @@ def get_all_streams():
     """
     session = SessionLocal()
     try:
-        streams = session.query(ActiveStream).order_by(ActiveStream.created_at.desc()).all()
+        streams = session.query(ActiveStream).order_by(ActiveStream.start_time.desc()).all()
         session.expunge_all()
         return streams
     finally:
@@ -149,6 +145,7 @@ def update_stream_status(job_name: str, status: str, error_message: str = None):
             if error_message:
                 stream.error_message = error_message
             session.commit()
+            notify_list_changed()
             logging.info(f"Updated stream {job_name} status to {status}")
         else:
             logging.warning(f"Stream {job_name} not found in database")
@@ -184,6 +181,28 @@ def remove_stream(job_name: str):
         session.close()
 
 
+def delete_stream_by_id(stream_id: int) -> bool:
+    """Delete a single stream history entry by its primary key.
+
+    Returns True if a row was deleted, False if not found.
+    """
+    session = SessionLocal()
+    try:
+        stream = session.query(ActiveStream).filter(ActiveStream.id == stream_id).first()
+        if not stream:
+            return False
+        session.delete(stream)
+        session.commit()
+        logging.info(f"Deleted stream history entry id={stream_id} ({stream.job_name})")
+        return True
+    except Exception as e:
+        session.rollback()
+        logging.error(f"Error deleting stream id={stream_id}: {e}")
+        raise
+    finally:
+        session.close()
+
+
 def cleanup_stale_streams():
     """
     Check all running streams and update status if process is dead.
@@ -204,11 +223,10 @@ def cleanup_stale_streams():
                 stream.status = "failed"
                 stream.error_message = "Process died unexpectedly"
                 stream.updated_at = datetime.utcnow().isoformat()
-                logging.warning(
-                    f"Stream {stream.job_name} (PID {stream.pid}) found dead, marked as failed"
-                )
+                logging.warning(f"Stream {stream.job_name} (PID {stream.pid}) found dead, marked as failed")
 
         session.commit()
+        notify_list_changed()
     except Exception as e:
         session.rollback()
         logging.error(f"Error during cleanup: {e}")

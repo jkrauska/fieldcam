@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: fieldcam
+Version: 0.1.0
+Summary: Web app for scheduling and managing live camera streams for ball field events
+Requires-Python: >=3.11
+Requires-Dist: apscheduler
+Requires-Dist: fastapi-login
+Requires-Dist: fastapi-proxiedheadersmiddleware
+Requires-Dist: fastapi[standard]
+Requires-Dist: jinja2
+Requires-Dist: pydantic-settings
+Requires-Dist: python-multipart
+Requires-Dist: sqlalchemy
+Requires-Dist: uvicorn[standard]
+Provides-Extra: dev
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: pre-commit; extra == "dev"
+Provides-Extra: yolo
+Requires-Dist: ultralytics>=8.0.0; extra == "yolo"

@@ -1,0 +1,145 @@
+{# Rendered inside a div with id="list-content" for Datastar morphing. #}
+<div class="image-container">
+    <img src="/dynamic/field.jpg?v={{ cache_bust }}" alt="Field" loading="lazy">
+    <div class="image-text">{{ field_name }} Field</div>
+</div>
+<div class="text-center">
+    Field Preview - Updated Every 5 minutes
+</div>
+<div id="detections" class="text-center text-muted small mt-1">
+    Detections: <span aria-live="polite">{{ detection_text }}</span>
+</div>
+
+{% set ns = namespace(has_visible=false) %}
+{% for job in jobs %}{% if 'HIDDEN' not in job.id %}{% set ns.has_visible = true %}{% endif %}{% endfor %}
+{% if active_streams or ns.has_visible %}
+<div class="mt-4" id="streams-section">
+    <h4>
+        <i class="bi bi-broadcast-pin"></i> Streams
+    </h4>
+    <div class="p-3 border rounded">
+    <table class="table table-hover table-sm table-responsive table-bordered mb-0">
+        <thead class="table-dark">
+            <tr>
+                <th scope="col">Status</th>
+                <th scope="col">Name</th>
+                <th scope="col">Dest</th>
+                <th scope="col">Start</th>
+                <th scope="col">Duration</th>
+                <th scope="col">Key</th>
+                <th align="center" scope="col">Control</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stream in active_streams %}
+            <tr class="table-success">
+                <td id="stream-status-{{ stream.job_name | replace(' ', '_') }}">
+                    <span class="badge bg-success">
+                        <i class="bi bi-broadcast-pin"></i> LIVE
+                    </span>
+                </td>
+                <td>{{ stream.job_name | clean_name }}</td>
+                <td>
+                    {% if stream.destination == 'youtube' %}<span class="badge bg-danger">YT</span>
+                    {% elif stream.destination == 'custom' %}<span class="badge bg-primary">Custom</span>
+                    {% else %}<span class="badge bg-success">GC</span>
+                    {% endif %}
+                </td>
+                <td><span class="local-time">{{ stream.start_time }}</span></td>
+                {% set total_m = (stream.duration / 60) | round | int %}
+                {% set total_mm = '%02d' | format(total_m) %}
+                <td id="stream-duration-{{ stream.job_name | replace(' ', '_') }}">00:00 of {{ total_mm }}:00</td>
+                <td>
+                    {% if stream.stream_key %}
+                    <span class="d-inline-block stream-key" tabindex="0" role="button"
+                        aria-label="Copy stream key to clipboard"
+                        data-on:click="copyToClipboard('{{ stream.stream_key }}', el)"
+                        title="{{ stream.stream_key }}">
+                        {{ stream.stream_key[13:][:6] }}...
+                    </span>
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                <td align="center">
+                    <form onsubmit="event.preventDefault()">
+                        <input type="hidden" name="name" value="{{ stream.job_name }}">
+                        <button type="button" style="border: none; background: none; cursor: pointer;"
+                            data-on:click="@post('/cancel_stream', {contentType: 'form'})">
+                            <i class="bi bi-stop-circle-fill" style="font-size: 24px; color: red;"></i>
+                            <span class="visually-hidden">Cancel Stream</span>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            {% for job in jobs %}
+            {% if 'HIDDEN' not in job.id %}
+            <tr>
+                <td>
+                    <span class="badge bg-secondary">
+                        <i class="bi bi-calendar-event"></i> Scheduled
+                    </span>
+                </td>
+                <td>{{ job.name | clean_name }}</td>
+                <td>
+                    {% set dest = job.kwargs.destination | default('gamechanger') %}
+                    {% if dest == 'youtube' %}<span class="badge bg-danger">YT</span>
+                    {% elif dest == 'custom' %}<span class="badge bg-primary">Custom</span>
+                    {% else %}<span class="badge bg-success">GC</span>
+                    {% endif %}
+                </td>
+                <td><span class="local-time">{{ job.next_run_time | datetime('%Y-%m-%dT%H:%M:%S') }}</span></td>
+                <td>
+                    {% if job.kwargs.duration is defined %}
+                    {% set jm = (job.kwargs.duration / 60) | round | int %}
+                    {{ '%02d' | format(jm) }}:00
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% if job.kwargs.key is defined %}
+                    <span class="d-inline-block stream-key" tabindex="0" role="button"
+                        aria-label="Copy stream key to clipboard"
+                        data-on:click="copyToClipboard('{{ job.kwargs.key }}', el)"
+                        title="{{ job.kwargs.key }}">
+                        {{ job.kwargs.key[13:][:6] }}...
+                    </span>
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                <td align="center">
+                    <form onsubmit="event.preventDefault()">
+                        <input type="hidden" name="name" value="{{ job.name }}">
+                        <input type="hidden" name="sure" value="yes">
+                        <button type="button" style="border: none; background: none; cursor: pointer;"
+                            data-on:click="@post('/remove_job', {contentType: 'form'})">
+                            <i class="bi bi-x-octagon-fill" style="font-size: 24px; color: red;"></i>
+                            <span class="visually-hidden">Remove job</span>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% if active_streams %}
+    <div id="stream-health" data-init="@get('/sse/stream-health')" style="display:none"></div>
+    {% endif %}
+</div>
+{% else %}
+<div class="mt-4" id="streams-section"></div>
+{% endif %}
+
+<div class="d-flex container mt-5 justify-content-center gap-3">
+    <a href="#" class="btn btn-success btn-lg" style="padding: 20px 40px; font-size: 20px;" role="button" data-on:click="evt.preventDefault(); $showScheduleModal = true">
+        <i class="bi bi-plus-circle-fill" style="color: white; font-size: 1rem;"></i> Schedule Stream
+    </a>
+    <a href="#" class="btn btn-secondary btn-lg" style="padding: 20px 40px; font-size: 20px;" data-on:click="evt.preventDefault(); $showHistoryModal = true; @get('/fragment/history')">
+        <i class="bi bi-clock-history" style="color: white; font-size: 1rem;"></i> View History
+    </a>
+</div>

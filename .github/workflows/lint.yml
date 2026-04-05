@@ -27,15 +27,14 @@ jobs:
       - name: Install dependencies
         run: |
           cd cam-app
-          uv venv
-          uv pip install -r requirements-dev.txt
+          uv sync --all-extras
 
       - name: Run ruff check
         run: |
           cd cam-app
-          .venv/bin/ruff check .
+          uv run ruff check .
 
       - name: Run ruff format check
         run: |
           cd cam-app
-          .venv/bin/ruff format --check .
+          uv run ruff format --check .

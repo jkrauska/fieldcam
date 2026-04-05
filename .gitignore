@@ -1,14 +1,22 @@
 
+__pycache__/
+
 letsencrypt/acme.json
 cam-app/venv
 cam-app/.ruff_cache
 cam-app/app/.ruff_cache
-jobs/jobs.sqlite
+jobs/
 cam-app/app/secrets.json
 cam-app/app/version.json
 logs/*
+*.log
+*.sqlite
+*.pt
 cam-app/app/static/field.jpg
 
 # Environment files (keep .env.example in git)
 .env
 cam-app/.env
+
+# Claude Code worktrees
+.claude/worktrees/

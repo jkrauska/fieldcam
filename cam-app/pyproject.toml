@@ -1,0 +1,63 @@
+[project]
+name = "fieldcam"
+version = "0.1.0"
+description = "Web app for scheduling and managing live camera streams for ball field events"
+requires-python = ">=3.11"
+dependencies = [
+    "apscheduler",
+    "datastar-py>=0.8.0",
+    "fastapi-login",
+    "fastapi-proxiedheadersmiddleware",
+    "fastapi[standard]",
+    "jinja2",
+    "pydantic-settings",
+    "python-multipart",
+    "sqlalchemy",
+    "uvicorn[standard]",
+    "ruff",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+]
+# YOLO person detection (count people in field image)
+yolo = [
+    "ultralytics>=8.0.0",
+]
+
+[tool.ruff]
+line-length = 150
+target-version = "py311"
+exclude = [
+    ".git",
+    ".ruff_cache",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["jobs*"]

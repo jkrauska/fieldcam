@@ -8,10 +8,18 @@ from apscheduler.jobstores.base import ConflictingIdError
 from .config import LOCAL_TZ, scheduler
 from .database import cancel_active_stream, cleanup_stale_streams
 from .random_names import generate_name
-from .streaming import stream_game
+from .streaming import snapshot_field_image, stream_game
 
 
-def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
+def new_stream(
+    name="",
+    start_time=False,
+    duration=60 * 5,
+    key="",
+    config=None,
+    destination="gamechanger",
+    custom_url="",
+):
     """
     Schedule a new stream job.
 
@@ -19,8 +27,10 @@ def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
         name: Name for the stream job (auto-generated if not provided)
         start_time: When to start the stream (defaults to far future)
         duration: Duration in seconds (default 5 minutes)
-        key: GameChanger stream key
+        key: Stream key for the destination service
         config: Configuration dictionary
+        destination: Target service — "gamechanger", "youtube", or "custom"
+        custom_url: Full RTMP base URL when destination is "custom"
 
     Returns:
         The name of the scheduled job
@@ -28,7 +38,7 @@ def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
     if config is None:
         config = {}
 
-    logging.info(f"New Stream: {name} {start_time} {duration} {key}")
+    logging.info(f"New Stream: {name} {start_time} {duration} {key} -> {destination}")
     now = datetime.now().astimezone(LOCAL_TZ)
 
     if not name:
@@ -38,28 +48,45 @@ def new_stream(name="", start_time=False, duration=60 * 5, key="", config=None):
 
     end_time = start_time + timedelta(seconds=duration)
 
-    # In Progress - adjust if stream should already be running
     if start_time < now and end_time > now:
         start_time = now + timedelta(seconds=2)
         new_duration = end_time - now
         duration = new_duration.total_seconds()
 
     if not key:
-        key = "sk_us-east-1_fakefake"
+        raise ValueError("Stream key is required")
 
-    try:
-        scheduler.add_job(
-            stream_game,
-            trigger="date",
-            run_date=start_time,
-            id=name,
-            name=name,
-            kwargs={"duration": duration, "key": key, "config": config, "name": name},
-        )
-    except ConflictingIdError:
-        logging.info(f"Job '{name}' Already Seen")
-        pass
-    return name
+    kwargs = {
+        "duration": duration,
+        "key": key,
+        "config": config,
+        "name": name,
+        "destination": destination,
+    }
+    if destination == "custom" and custom_url:
+        kwargs["custom_url"] = custom_url
+
+    # If the name already exists, append _1, _2, ... until unique
+    job_name = name
+    suffix = 0
+    while True:
+        try:
+            kwargs["name"] = job_name
+            scheduler.add_job(
+                stream_game,
+                trigger="date",
+                run_date=start_time,
+                id=job_name,
+                name=job_name,
+                kwargs=kwargs,
+            )
+            break
+        except ConflictingIdError:
+            suffix += 1
+            job_name = f"{name}_{suffix}"
+            logging.info(f"Job '{name}' already exists, trying '{job_name}'")
+
+    return job_name
 
 
 def get_scheduled_jobs():
@@ -96,8 +123,27 @@ def start_cleanup_task():
         )
         logging.info("Started periodic cleanup task for stale streams")
     except ConflictingIdError:
-        # Task already exists, which is fine
         logging.info("Cleanup task already running")
+
+    # Grab a field camera snapshot every 60 seconds
+    scheduler.add_job(
+        snapshot_field_image,
+        trigger="interval",
+        seconds=60,
+        id="HIDDEN_snapshot_field",
+        name="HIDDEN_snapshot_field",
+        replace_existing=True,
+    )
+    # Take one immediately at startup, then warm the detection cache
+    snapshot_field_image()
+    logging.info("Started field snapshot task (every 60s)")
+
+    import threading
+
+    from .routes import _refresh_detection_cache
+
+    threading.Thread(target=_refresh_detection_cache, daemon=True).start()
+    logging.info("Kicked off background detection cache warm-up")
 
 
 def cancel_stream(job_name: str):

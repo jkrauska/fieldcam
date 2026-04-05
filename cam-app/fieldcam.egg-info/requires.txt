@@ -7,3 +7,10 @@ pydantic-settings
 python-multipart
 sqlalchemy
 uvicorn[standard]
+
+[dev]
+ruff
+pre-commit
+
+[yolo]
+ultralytics>=8.0.0

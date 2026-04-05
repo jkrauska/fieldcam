@@ -4,7 +4,7 @@
 # Usage: ./build.sh [now]
 #   now - Force an immediate build before entering the watch loop
 
-DIRECTORY_TO_WATCH="/home/stream411/fieldcam/cam-app/app"
+DIRECTORY_TO_WATCH="/home/stream411/dstar/fieldcam/cam-app/app"
 
 # Check if running on Linux
 if [[ "$(uname)" != "Linux" ]]; then
@@ -46,13 +46,25 @@ if [[ "$1" == "now" ]]; then
     build_image
 fi
 
+DEBOUNCE_SECONDS=60
+
 while true; do
     echo "waiting for changes"
     inotifywait --recursive --event modify,create,delete \
         --exclude '.*\.jpg$' \
         "$DIRECTORY_TO_WATCH"
 
-    echo "Change detected in directory '$DIRECTORY_TO_WATCH'."
+    echo "Change detected — debouncing for ${DEBOUNCE_SECONDS}s..."
+
+    # Keep resetting the timer while changes keep arriving
+    while inotifywait --recursive --event modify,create,delete \
+        --exclude '.*\.jpg$' \
+        --timeout "$DEBOUNCE_SECONDS" \
+        "$DIRECTORY_TO_WATCH"; do
+        echo "More changes detected — restarting ${DEBOUNCE_SECONDS}s timer..."
+    done
+
+    echo "No changes for ${DEBOUNCE_SECONDS}s — rebuilding."
     build_image
 
 done

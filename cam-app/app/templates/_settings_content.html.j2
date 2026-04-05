@@ -1,0 +1,36 @@
+<form onsubmit="event.preventDefault()"
+      data-signals:settings-dirty="false"
+      data-on:input__this="
+        const inputs = el.querySelectorAll('input[data-original]');
+        let dirty = false;
+        for (const inp of inputs) {
+          if (inp.value !== inp.dataset.original) { dirty = true; break; }
+        }
+        $settingsDirty = dirty;
+      ">
+{% for group_label, caution, fields in groups %}
+<div class="mb-4">
+    <h6 class="fw-bold{% if caution %} text-warning{% endif %}">
+        {% if caution %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% endif %}
+        {{ group_label }}
+    </h6>
+    {% if caution %}
+    <div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.85em">
+        Changing these values may break connectivity. Edit with care.
+    </div>
+    {% endif %}
+    {% for key, label, input_type in fields %}
+    <div class="mb-2">
+        <label for="setting-{{ key }}" class="form-label mb-0" style="font-size:.85em">{{ label }}</label>
+        <input type="{{ input_type }}" class="form-control form-control-sm" id="setting-{{ key }}"
+               name="{{ key }}" value="{{ values.get(key, '') }}" data-original="{{ values.get(key, '') }}" autocomplete="off">
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}
+<button type="button" class="btn btn-primary w-100"
+        data-attr:disabled="!$settingsDirty"
+        data-on:click="if(el.closest('form').reportValidity()){@post('/settings/save', {contentType: 'form'})}">
+    <i class="bi bi-save me-1"></i> Save &amp; Restart
+</button>
+</form>

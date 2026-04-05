@@ -1,0 +1,11 @@
+<div id="login-content" class="container mt-5" style="max-width: 350px;">
+    <form onsubmit="event.preventDefault()">
+        <input type="hidden" name="next" value="{{ next_url | default('/') }}">
+        <div class="mb-3">
+            <label for="password" class="visually-hidden">Password</label>
+            <input type="password" class="form-control" id="password" name="password" required autocomplete="current-password" placeholder="Enter password"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('login-btn').click()}">
+        </div>
+        <button type="button" id="login-btn" class="btn btn-primary w-100" data-on:click="if(el.closest('form').reportValidity()){@post('/login', {contentType: 'form'})}">Login</button>
+    </form>
+</div>

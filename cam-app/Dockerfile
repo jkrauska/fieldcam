@@ -18,12 +18,13 @@ FROM base-os AS python-env
 # Set working directory
 WORKDIR /code
 
-# Copy requirements file
-COPY requirements.txt .
+# Copy dependency manifest (rebuilt when pyproject.toml changes)
+COPY pyproject.toml .
 
-# Install dependencies using UV
-# This layer will be rebuilt only when requirements.txt changes
-RUN uv pip install --system --no-cache -r requirements.txt
+# Install dependencies into system Python (no venv in container)
+ENV UV_SYSTEM_PYTHON=1
+RUN uv pip install --no-cache -r pyproject.toml && \
+    uv pip install --no-cache ".[yolo]"
 
 # Runtime stage: Create minimal image
 FROM base-os
@@ -34,12 +35,14 @@ ARG GIT_BRANCH=unknown
 ARG BUILD_TIME=unknown
 
 # Copy installed Python packages from python-env stage
-# This will only rebuild when requirements.txt changes
+# Rebuilds when pyproject.toml changes
 COPY --from=python-env /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=python-env /usr/local/bin /usr/local/bin
 
 # Set working directory
 WORKDIR /code
+
+ENV YOLO_CONFIG_DIR=/tmp/Ultralytics
 
 # Copy application code
 COPY ./app /code/app

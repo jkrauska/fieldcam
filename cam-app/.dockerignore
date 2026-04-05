@@ -1,0 +1,10 @@
+.venv/
+models/
+logs/
+jobs/
+fieldcam.egg-info/
+__pycache__/
+*.pyc
+.env
+.env.example
+.claude/
