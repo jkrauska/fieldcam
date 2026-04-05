@@ -61,11 +61,11 @@ def snapshot_field_image():
             f.write(resp.content)
         os.replace(tmp, output)
     except httpx.TimeoutException:
-        logging.warning("Field snapshot timed out")
+        logging.warning("Field snapshot timed out connecting to %s", url)
     except httpx.HTTPStatusError as e:
-        logging.warning("Field snapshot HTTP error: %s", e)
+        logging.warning("Field snapshot HTTP error from %s: %s", url, e)
     except Exception as e:
-        logging.warning("Field snapshot error: %s", e)
+        logging.warning("Field snapshot failed (%s): %s", settings.cam_host, e)
 
 
 def _build_output_url(key: str, destination: str = "gamechanger", custom_url: str = "") -> str:
