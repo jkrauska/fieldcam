@@ -38,6 +38,7 @@ from .routes import (
     submit_job,
 )
 from .scheduler import start_cleanup_task
+from .streaming import terminate_all_streams
 
 # Configure logging - apply consistent format to all loggers including uvicorn
 LOG_FORMAT = "%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s"
@@ -84,9 +85,10 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Signal SSE generators to exit so uvicorn can close connections quickly."""
+    """Signal SSE generators to exit and terminate any running ffmpeg processes."""
     signal_shutdown()
-    logging.info("Shutdown signal sent")
+    terminate_all_streams()
+    logging.info("Shutdown complete — SSE loops stopped, ffmpeg processes terminated")
 
 
 # Authentication routes
@@ -169,6 +171,12 @@ async def remove_job(request: Request, user=Depends(login_manager)):  # noqa: B0
 async def cancel_stream(request: Request, user=Depends(login_manager)):  # noqa: B008
     """Handle canceling an active stream."""
     return await cancel_stream_route(request, user)
+
+
+@app.get("/health")
+def health():
+    """Health check for Docker/orchestrator probes."""
+    return {"status": "ok"}
 
 
 @app.get("/version")

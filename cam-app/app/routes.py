@@ -5,6 +5,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -396,8 +397,9 @@ async def remove_job_route(request: Request, user=Depends(login_manager)):  # no
             html = _render_list_inner(request)
             return DatastarResponse(SSE.patch_elements(html, selector="#list-content", mode=ElementPatchMode.INNER))
         except Exception as e:
-            logging.error(f"Error removing job: {e}")
-            raise HTTPException(status_code=404, detail=str(e)) from e
+            error_id = uuid.uuid4().hex[:8].upper()
+            logging.error("Error removing job [%s]: %s", error_id, e, exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Please send support this message: ERROR: {error_id}") from e
 
 
 async def cancel_stream_route(request: Request, user=Depends(login_manager)):  # noqa: B008
@@ -418,8 +420,9 @@ async def cancel_stream_route(request: Request, user=Depends(login_manager)):  #
             html = _render_list_inner(request)
             return DatastarResponse(SSE.patch_elements(html, selector="#list-content", mode=ElementPatchMode.INNER))
         except Exception as e:
-            logging.error(f"Error canceling stream: {e}")
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            error_id = uuid.uuid4().hex[:8].upper()
+            logging.error("Error canceling stream [%s]: %s", error_id, e, exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Please send support this message: ERROR: {error_id}") from e
 
 
 async def history_fragment(request: Request, user=Depends(login_manager)):  # noqa: B008
