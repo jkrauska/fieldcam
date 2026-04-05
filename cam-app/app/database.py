@@ -5,7 +5,7 @@ import os
 import signal
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, Integer, String, Text, create_engine, text
+from sqlalchemy import Column, Integer, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .config import JOBS_DB_URL
@@ -40,12 +40,15 @@ SessionLocal = sessionmaker(bind=engine)
 def init_db():
     """Initialize database and create tables if they don't exist."""
     Base.metadata.create_all(engine)
-    with engine.connect() as conn:
+    columns = {c["name"] for c in inspect(engine).get_columns("active_streams")}
+    if "destination" not in columns:
         try:
-            conn.execute(text("ALTER TABLE active_streams ADD COLUMN destination TEXT DEFAULT 'gamechanger'"))
-            conn.commit()
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE active_streams ADD COLUMN destination TEXT DEFAULT 'gamechanger'"))
+                conn.commit()
+            logging.info("Migration: added 'destination' column to active_streams")
         except Exception:
-            pass
+            logging.warning("Migration failed: could not add 'destination' column", exc_info=True)
     logging.info("Database initialized - active_streams table ready")
 
 

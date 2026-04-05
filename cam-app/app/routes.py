@@ -232,9 +232,9 @@ def _render_shell(
     now = datetime.now(tz=LOCAL_TZ)
     blackout = [t.strip() for t in settings.blackout_teams.split(",") if t.strip()]
     return templates.TemplateResponse(
+        request,
         "base_shell.html.j2",
         {
-            "request": request,
             "page_content": page_content,
             "page_title": page_title,
             "user": user,
@@ -366,7 +366,6 @@ async def submit_job(
         start_time=start_datetime_obj,
         duration=calculated_duration_seconds,
         key=stream_key,
-        config={},
         destination=destination,
         custom_url=custom_url,
     )

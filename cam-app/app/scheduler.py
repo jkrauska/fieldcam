@@ -16,7 +16,6 @@ def new_stream(
     start_time=False,
     duration=60 * 5,
     key="",
-    config=None,
     destination="gamechanger",
     custom_url="",
 ):
@@ -28,15 +27,12 @@ def new_stream(
         start_time: When to start the stream (defaults to far future)
         duration: Duration in seconds (default 5 minutes)
         key: Stream key for the destination service
-        config: Configuration dictionary
         destination: Target service — "gamechanger", "youtube", or "custom"
         custom_url: Full RTMP base URL when destination is "custom"
 
     Returns:
         The name of the scheduled job
     """
-    if config is None:
-        config = {}
 
     logging.info(f"New Stream: {name} {start_time} {duration} {key} -> {destination}")
     now = datetime.now().astimezone(LOCAL_TZ)
@@ -59,7 +55,6 @@ def new_stream(
     kwargs = {
         "duration": duration,
         "key": key,
-        "config": config,
         "name": name,
         "destination": destination,
     }

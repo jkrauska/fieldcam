@@ -43,7 +43,7 @@ def terminate_all_streams(timeout: int = 5):
             proc.kill()
 
 
-def input_cam_url(config):
+def input_cam_url():
     """Generate the RTSP camera input URL (main stream, channel 101)."""
     return f"rtsp://{settings.cam_user}:{settings.cam_pass}@{settings.cam_host}:554/Streaming/channels/101/"
 
@@ -105,14 +105,13 @@ def _parse_progress(block: dict[str, str]) -> dict:
     }
 
 
-def stream_game(duration=(60 * 4), key="", config=None, name="", destination="gamechanger", custom_url=""):
+def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", custom_url=""):
     """
     Stream a game from the camera to an RTMP destination.
 
     Args:
         duration: Duration in seconds for the stream
         key: Stream key appended to the destination base URL
-        config: Configuration dictionary (not currently used)
         name: Name of the stream for logging purposes
         destination: Target service — "gamechanger", "youtube", or "custom"
         custom_url: Full RTMP base URL when destination is "custom"
@@ -120,14 +119,11 @@ def stream_game(duration=(60 * 4), key="", config=None, name="", destination="ga
     Returns:
         Return code from FFmpeg process
     """
-    if config is None:
-        config = {}
-
     logging.info(f"Starting stream to {destination}...")
     pretty_name = name.replace(" ", "_")
     duration = int(duration)
 
-    input_cam = input_cam_url(config)
+    input_cam = input_cam_url()
 
     if not key:
         logging.error("No stream key given")

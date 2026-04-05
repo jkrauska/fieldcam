@@ -50,14 +50,16 @@ logging.basicConfig(
     datefmt=LOG_DATEFMT,
 )
 
-# Override uvicorn's loggers to use the same format
-for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-    _logger = logging.getLogger(_name)
-    _logger.handlers.clear()
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATEFMT))
-    _logger.addHandler(_handler)
-    _logger.propagate = False
+
+def _override_uvicorn_loggers():
+    """Override uvicorn's loggers to use the same format as the rest of the app."""
+    for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        _logger = logging.getLogger(_name)
+        _logger.handlers.clear()
+        _handler = logging.StreamHandler()
+        _handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATEFMT))
+        _logger.addHandler(_handler)
+        _logger.propagate = False
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -78,6 +80,7 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and start background tasks on application startup."""
+    _override_uvicorn_loggers()
     init_db()
     start_cleanup_task()
     logging.info("Application startup complete - database and cleanup task initialized")
