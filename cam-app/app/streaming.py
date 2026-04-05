@@ -5,6 +5,8 @@ import os
 import subprocess
 import threading
 
+import httpx
+
 from .config import settings
 from .database import add_active_stream, update_stream_status
 from .event_bus import clear_stream_stats, update_stream_stats
@@ -14,46 +16,54 @@ RTMP_BASES = {
     "youtube": settings.rtmp_youtube,
 }
 
+# Registry of live ffmpeg subprocesses so we can terminate them on shutdown.
+_active_processes: dict[str, subprocess.Popen] = {}
+_process_lock = threading.Lock()
+
+
+def terminate_all_streams(timeout: int = 5):
+    """SIGTERM all tracked ffmpeg processes, wait, then SIGKILL any survivors."""
+    with _process_lock:
+        procs = dict(_active_processes)
+    if not procs:
+        return
+    logging.info("Terminating %d active ffmpeg process(es)…", len(procs))
+    for name, proc in procs.items():
+        try:
+            proc.terminate()
+            logging.info("Sent SIGTERM to stream %s (PID %d)", name, proc.pid)
+        except OSError:
+            pass
+    for name, proc in procs.items():
+        try:
+            proc.wait(timeout=timeout)
+            logging.info("Stream %s exited", name)
+        except subprocess.TimeoutExpired:
+            logging.warning("Stream %s did not exit in %ds, sending SIGKILL", name, timeout)
+            proc.kill()
+
 
 def input_cam_url(config):
     """Generate the RTSP camera input URL (main stream, channel 101)."""
     return f"rtsp://{settings.cam_user}:{settings.cam_pass}@{settings.cam_host}:554/Streaming/channels/101/"
 
 
-def _snapshot_cam_url():
-    """RTSP URL for the sub-stream (channel 102) used for snapshots."""
-    return f"rtsp://{settings.cam_user}:{settings.cam_pass}@{settings.cam_host}:554/Streaming/channels/102/"
-
-
 def snapshot_field_image():
-    """Grab a single frame from the camera sub-stream and save to field_image_path."""
+    """Grab a JPEG snapshot from the Hikvision ISAPI endpoint (sub-stream, channel 102)."""
+    url = f"http://{settings.cam_host}/ISAPI/Streaming/channels/102/picture"
+    auth = httpx.DigestAuth(settings.cam_user, settings.cam_pass)
     output = settings.field_image_path
     tmp = output + ".tmp"
-    cmd = [
-        "/usr/bin/ffmpeg",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-y",
-        "-rtsp_transport",
-        "tcp",
-        "-i",
-        _snapshot_cam_url(),
-        "-frames:v",
-        "1",
-        "-q:v",
-        "2",
-        "-f",
-        "image2",  # force format since .tmp extension is ambiguous
-        tmp,
-    ]
     try:
-        subprocess.run(cmd, timeout=15, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        os.replace(tmp, output)  # atomic rename
-    except subprocess.TimeoutExpired:
+        resp = httpx.get(url, auth=auth, timeout=10)
+        resp.raise_for_status()
+        with open(tmp, "wb") as f:
+            f.write(resp.content)
+        os.replace(tmp, output)
+    except httpx.TimeoutException:
         logging.warning("Field snapshot timed out")
-    except subprocess.CalledProcessError as e:
-        logging.warning("Field snapshot failed: %s", e.stderr.decode().strip() if e.stderr else e)
+    except httpx.HTTPStatusError as e:
+        logging.warning("Field snapshot HTTP error: %s", e)
     except Exception as e:
         logging.warning("Field snapshot error: %s", e)
 
@@ -159,6 +169,9 @@ def stream_game(duration=(60 * 4), key="", config=None, name="", destination="ga
         env=ffmpeg_env,
     )
 
+    with _process_lock:
+        _active_processes[name] = process
+
     # Register stream in database immediately after starting
     try:
         add_active_stream(
@@ -224,4 +237,6 @@ def stream_game(duration=(60 * 4), key="", config=None, name="", destination="ga
         update_stream_status(name, "failed", str(e))
         raise
     finally:
+        with _process_lock:
+            _active_processes.pop(name, None)
         clear_stream_stats(name)
