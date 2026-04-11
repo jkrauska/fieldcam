@@ -24,9 +24,9 @@ Required variables:
 | Variable         | Description                                     |
 | ---------------- | ----------------------------------------------- |
 | `SECRET_KEY`     | Random string for session signing               |
-| `CAM_HOST`       | IP address of the RTSP camera                   |
-| `CAM_USER`       | Camera username                                 |
-| `CAM_PASS`       | Camera password                                 |
+| `CAMERA_IP`      | IP address of the RTSP camera                   |
+| `CAMERA_USER`    | Camera username                                 |
+| `CAMERA_PASS`    | Camera password                                 |
 | `PASSWORDS`      | Comma-separated list of allowed login passwords |
 | `ADMIN_PASSWORD` | Password that unlocks the settings page         |
 

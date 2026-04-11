@@ -655,9 +655,9 @@ _SETTINGS_GROUPS = [
         "Camera",
         True,
         [
-            ("CAM_HOST", "Camera IP", "text"),
-            ("CAM_USER", "Camera username", "text"),
-            ("CAM_PASS", "Camera password", "text"),
+            ("CAMERA_IP", "Camera IP", "text"),
+            ("CAMERA_USER", "Camera username", "text"),
+            ("CAMERA_PASS", "Camera password", "text"),
         ],
     ),
     (

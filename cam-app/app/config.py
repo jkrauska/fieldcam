@@ -33,10 +33,10 @@ class Settings(BaseSettings):
     secret_key: str
     cookie_name: str = "stream411_login"
 
-    # Camera configuration
-    cam_host: str
-    cam_user: str
-    cam_pass: str
+    # Camera configuration (env: CAMERA_IP, CAMERA_USER, CAMERA_PASS)
+    camera_ip: str = ""
+    camera_user: str = ""
+    camera_pass: str = ""
 
     # Application settings
     location: str = "Tepper"
