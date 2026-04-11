@@ -43,7 +43,7 @@ def terminate_all_streams(timeout: int = 5):
             proc.kill()
 
 
-def input_cam_url():
+def input_cam_url() -> str:
     """Generate the RTSP camera input URL (main stream, channel 101)."""
     return f"rtsp://{settings.camera_user}:{settings.camera_pass}@{settings.camera_ip}:554/Streaming/channels/101/"
 
@@ -129,7 +129,7 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         logging.error("CAMERA_IP is not set; cannot start stream")
         return
 
-    input_cam = input_cam_url(config)
+    input_cam = input_cam_url()
 
     if not key:
         logging.error("No stream key given")
