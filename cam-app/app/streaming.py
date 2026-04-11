@@ -62,12 +62,14 @@ def snapshot_field_image():
         with open(tmp, "wb") as f:
             f.write(resp.content)
         os.replace(tmp, output)
+    except httpx.ConnectError as e:
+        logging.warning("Field snapshot connect error (%s): %s", settings.camera_ip, e)
     except httpx.TimeoutException:
         logging.warning("Field snapshot timed out connecting to %s", url)
     except httpx.HTTPStatusError as e:
         logging.warning("Field snapshot HTTP error from %s: %s", url, e)
     except Exception as e:
-        logging.warning("Field snapshot failed (%s): %s", settings.cam_host, e)
+        logging.warning("Field snapshot failed (%s): %s", settings.camera_ip, e)
 
 
 def _build_output_url(key: str, destination: str = "gamechanger", custom_url: str = "") -> str:
