@@ -6,6 +6,7 @@ alwaysApply: true
 # Project conventions
 
 - **uv only:** Use `uv run`, `uv add`, `uv sync` for Python. No bare `python` or `pip`.
+- **Lint before commit:** Always run `uv run ruff check . && uv run ruff format .` from `cam-app/` before every git commit. Fix any issues before committing.
 - **Datastar and SPA:** Prefer partial fragments and the existing SPA shell/router; use `datastar-selector` / `datastar-mode` for responses. Avoid full-page reloads when SPA fits.
 - **Auth:** Protect any user-facing or mutation route with `user=Depends(login_manager)` from `app.config`. Do not add endpoints without this when login is required.
 

@@ -15,6 +15,11 @@ Items from prior planning docs that have been implemented.
 ## Security
 
 - **CSRF middleware** (`csrf.py`) — wired into FastAPI via `app.add_middleware(CSRFMiddleware)`
+- **Exception details no longer leaked** — cancel/remove routes return opaque `error_id` instead of `str(e)`
+
+## Reliability
+
+- **Graceful FFmpeg shutdown** — `terminate_all_streams()` sends SIGTERM/SIGKILL to all FFmpeg subprocesses on app exit
 
 ## Active Streams & Database (from ACTIVE_STREAMS_IMPLEMENTATION)
 
@@ -55,6 +60,7 @@ Items from prior planning docs that have been implemented.
 
 ## Infrastructure
 
+- **Health check endpoint** — `GET /health` returns `{"status": "ok"}` for Docker/orchestrator probes
 - **Multi-arch Docker build** support (`buildx.sh`)
 - **GitHub Actions CI** — ruff lint + format checks (`lint.yml`), container build (`build-camapp.yml`)
 - **`.dockerignore`** added
