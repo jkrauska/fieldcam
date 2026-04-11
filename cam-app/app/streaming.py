@@ -43,15 +43,17 @@ def terminate_all_streams(timeout: int = 5):
             proc.kill()
 
 
-def input_cam_url():
+def input_cam_url() -> str:
     """Generate the RTSP camera input URL (main stream, channel 101)."""
-    return f"rtsp://{settings.cam_user}:{settings.cam_pass}@{settings.cam_host}:554/Streaming/channels/101/"
+    return f"rtsp://{settings.camera_user}:{settings.camera_pass}@{settings.camera_ip}:554/Streaming/channels/101/"
 
 
 def snapshot_field_image():
     """Grab a JPEG snapshot from the Hikvision ISAPI endpoint (sub-stream, channel 102)."""
-    url = f"http://{settings.cam_host}/ISAPI/Streaming/channels/102/picture"
-    auth = httpx.DigestAuth(settings.cam_user, settings.cam_pass)
+    if not settings.camera_ip:
+        return
+    url = f"http://{settings.camera_ip}/ISAPI/Streaming/channels/102/picture"
+    auth = httpx.DigestAuth(settings.camera_user, settings.camera_pass)
     output = settings.field_image_path
     tmp = output + ".tmp"
     try:
@@ -122,6 +124,10 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
     logging.info(f"Starting stream to {destination}...")
     pretty_name = name.replace(" ", "_")
     duration = int(duration)
+
+    if not settings.camera_ip:
+        logging.error("CAMERA_IP is not set; cannot start stream")
+        return
 
     input_cam = input_cam_url()
 

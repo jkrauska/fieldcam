@@ -43,9 +43,11 @@ SECRET_KEY=your-secret-key-here
 COOKIE_NAME=stream411_login
 
 # Camera Configuration (REQUIRED)
-CAM_HOST=192.168.x.x
-CAM_USER=admin
-CAM_PASS=your-camera-password
+CAMERA_USER=
+CAMERA_PASS=
+
+# Camera IP (auto-populated by discover-camera.sh)
+CAMERA_IP=
 
 # Application Settings
 LOCATION=Tepper
@@ -295,9 +297,9 @@ The application uses Pydantic Settings for configuration management. All configu
 
 **Required Variables:**
 - `SECRET_KEY` - Secret key for session management
-- `CAM_HOST` - Camera IP address
-- `CAM_USER` - Camera username
-- `CAM_PASS` - Camera password
+- `CAMERA_IP` - Camera IP address
+- `CAMERA_USER` - Camera username
+- `CAMERA_PASS` - Camera password
 - `AUTH_HASH_SFLL` - BCrypt hash for authentication
 - `PASSWORDS` - Comma-separated list of valid passwords
 
@@ -357,7 +359,7 @@ Verify your `.env` file exists and contains valid credentials:
 ls -la cam-app/.env
 
 # Verify required variables are set
-grep -E "SECRET_KEY|CAM_HOST|AUTH_HASH_SFLL" cam-app/.env
+grep -E "SECRET_KEY|CAMERA_IP|AUTH_HASH_SFLL" cam-app/.env
 ```
 
 ### Configuration Issues
