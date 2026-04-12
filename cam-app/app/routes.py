@@ -135,7 +135,7 @@ def serve_field_image():
     )
 
 
-_THUMB_WIDTH = 100
+_THUMB_WIDTH = 200
 
 
 def serve_field_thumb():
