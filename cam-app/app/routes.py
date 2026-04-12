@@ -13,7 +13,7 @@ from datastar_py import ServerSentEventGenerator as SSE  # noqa: N814
 from datastar_py.consts import ElementPatchMode
 from datastar_py.fastapi import DatastarResponse
 from fastapi import Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from .config import _ENV_FILE, LOCAL_TZ, login_manager, settings
@@ -128,6 +128,42 @@ def serve_field_image():
         )
     from fastapi.responses import Response
 
+    return Response(
+        content=_PLACEHOLDER_SVG,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
+_THUMB_WIDTH = 100
+
+
+def serve_field_thumb():
+    """Serve a 100px-wide thumbnail of the field image (no auth required)."""
+    import io
+
+    from PIL import Image
+
+    file_path = Path(settings.field_image_path)
+    if file_path.is_file() and file_path.stat().st_size > 0:
+        with Image.open(file_path) as img:
+            ratio = _THUMB_WIDTH / img.width
+            thumb_height = int(img.height * ratio)
+            thumb = img.resize((_THUMB_WIDTH, thumb_height), Image.LANCZOS)
+            buf = io.BytesIO()
+            thumb.save(buf, format="JPEG", quality=70)
+            buf.seek(0)
+            return Response(
+                content=buf.getvalue(),
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=30"},
+            )
+    if _PLACEHOLDER_IMAGE.is_file():
+        return FileResponse(
+            str(_PLACEHOLDER_IMAGE),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-store, max-age=0"},
+        )
     return Response(
         content=_PLACEHOLDER_SVG,
         media_type="image/svg+xml",

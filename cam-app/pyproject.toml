@@ -14,6 +14,7 @@ dependencies = [
     "python-multipart",
     "sqlalchemy",
     "uvicorn[standard]",
+    "pillow",
     "ruff",
 ]
 
