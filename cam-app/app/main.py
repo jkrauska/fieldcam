@@ -31,6 +31,7 @@ from .routes import (
     remove_job_route,
     save_settings,
     serve_field_image,
+    serve_field_thumb,
     settings_fragment,
     signal_shutdown,
     sse_list,
@@ -153,6 +154,12 @@ def list_redirect():
 def dynamic_field_image(user=Depends(login_manager)):  # noqa: B008
     """Serve field camera image without caching (auth required)."""
     return serve_field_image()
+
+
+@app.get("/dynamic/fieldthumb.jpg")
+def dynamic_field_thumb():
+    """Serve a small thumbnail of the field image (no auth required)."""
+    return serve_field_thumb()
 
 
 @app.get("/add", response_class=HTMLResponse)
