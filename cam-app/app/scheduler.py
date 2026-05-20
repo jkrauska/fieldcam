@@ -7,6 +7,7 @@ from apscheduler.jobstores.base import ConflictingIdError
 
 from .config import LOCAL_TZ, scheduler
 from .database import cancel_active_stream, cleanup_stale_streams
+from .metrics import prune_old_samples, sample_metrics
 from .random_names import generate_name
 from .streaming import snapshot_field_image, stream_game
 
@@ -139,6 +140,29 @@ def start_cleanup_task():
 
     threading.Thread(target=_refresh_detection_cache, daemon=True).start()
     logging.info("Kicked off background detection cache warm-up")
+
+    # Sample CPU temp + detection counts into the metric_samples table every 60s
+    scheduler.add_job(
+        sample_metrics,
+        trigger="interval",
+        seconds=60,
+        id="HIDDEN_sample_metrics",
+        name="HIDDEN_sample_metrics",
+        replace_existing=True,
+    )
+    logging.info("Started metric sampler (every 60s)")
+
+    # Prune raw samples older than 30 days, daily
+    scheduler.add_job(
+        prune_old_samples,
+        trigger="interval",
+        hours=24,
+        id="HIDDEN_prune_metrics",
+        name="HIDDEN_prune_metrics",
+        kwargs={"days": 30},
+        replace_existing=True,
+    )
+    logging.info("Started metric retention task (daily, keep 30 days)")
 
 
 def cancel_stream(job_name: str):

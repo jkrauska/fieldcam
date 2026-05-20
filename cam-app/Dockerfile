@@ -21,7 +21,13 @@ WORKDIR /code
 # Copy dependency manifest (rebuilt when pyproject.toml changes)
 COPY pyproject.toml .
 
-# Install dependencies into system Python (no venv in container)
+# Install dependencies into system Python (no venv in container).
+# We intentionally install only the base dependencies and skip the optional
+# `yolo` extra (`ultralytics` -> torch / CUDA / cuDNN), which roughly triples
+# the image size and adds many minutes to the build. The app degrades
+# gracefully when ultralytics is missing (see app/yolo_check.py). To build a
+# YOLO-enabled image locally, change the line below to:
+#   uv pip install --no-cache -r pyproject.toml --extra yolo
 ENV UV_SYSTEM_PYTHON=1
 RUN uv pip install --no-cache -r pyproject.toml
 
@@ -40,8 +46,6 @@ COPY --from=python-env /usr/local/bin /usr/local/bin
 
 # Set working directory
 WORKDIR /code
-
-ENV YOLO_CONFIG_DIR=/tmp/Ultralytics
 
 # Copy application code
 COPY ./app /code/app

@@ -35,7 +35,9 @@ build_image() {
         --build-arg BUILD_TIME="$BUILD_TIME" \
         -t camapp .
 
-    docker-compose up -d
+    # Image rebuilt. Restart the running container manually to pick it up, e.g.:
+    #   docker rm -f camapp && docker run -d --name camapp ... camapp:latest
+    # See README.md for the full `docker run` command.
     tput bel
     date
 }

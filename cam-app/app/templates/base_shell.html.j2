@@ -57,6 +57,9 @@
             <a class="navbar-brand" href="/">FieldCam</a>
             {% if user %}
             <div class="navbar-nav ms-auto align-items-center gap-2">
+                <a href="/data" class="btn btn-outline-info btn-sm py-1 px-2" title="Metrics" aria-label="Metrics">
+                    <i class="bi bi-graph-up" aria-hidden="true"></i>
+                </a>
                 {% if user.is_admin %}
                 <a href="#" class="btn btn-outline-warning btn-sm py-1 px-2" title="Settings" aria-label="Settings"
                    data-on:click="evt.preventDefault(); $showSettingsModal = true; @get('/fragment/settings')">

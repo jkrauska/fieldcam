@@ -22,12 +22,14 @@ from .database import init_db
 from .routes import (
     add_job_page,
     cancel_stream_route,
+    data_page,
     delete_history_entry,
     detection_api,
     detection_fragment,
     get_version,
     history_fragment,
     list_jobs_page,
+    metrics_api,
     remove_job_route,
     save_settings,
     serve_field_image,
@@ -197,6 +199,8 @@ def version():
 
 
 app.get("/api/detections")(detection_api)
+app.get("/api/metrics")(metrics_api)
+app.get("/data", response_class=HTMLResponse)(data_page)
 app.get("/fragment/detections", response_class=HTMLResponse)(detection_fragment)
 app.get("/fragment/history", response_class=HTMLResponse)(history_fragment)
 app.post("/delete_history", response_class=HTMLResponse)(delete_history_entry)

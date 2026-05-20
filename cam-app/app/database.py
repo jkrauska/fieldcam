@@ -5,7 +5,7 @@ import os
 import signal
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, Integer, String, Text, create_engine, inspect, text
+from sqlalchemy import Column, Float, Index, Integer, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .config import JOBS_DB_URL
@@ -30,6 +30,25 @@ class ActiveStream(Base):
     error_message = Column(Text)
     created_at = Column(String, default=lambda: datetime.now(UTC).isoformat())
     updated_at = Column(String, default=lambda: datetime.now(UTC).isoformat())
+
+
+class MetricSample(Base):
+    """Append-only time-series samples for host + detection metrics.
+
+    Wide format keeps storage compact and queries trivial for the small,
+    fixed set of metrics we record (one row per sampling interval).
+    """
+
+    __tablename__ = "metric_samples"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ts = Column(Integer, nullable=False)  # unix epoch seconds, UTC
+    cpu_temp_c = Column(Float)  # nullable: sensor may be unavailable
+    person_count = Column(Integer)  # nullable: detection not yet warm
+    bird_count = Column(Integer)
+    total_count = Column(Integer)
+
+    __table_args__ = (Index("ix_metric_samples_ts", "ts"),)
 
 
 # Create engine and session (same resolved path as APScheduler in config)

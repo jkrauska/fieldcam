@@ -75,11 +75,10 @@ def _format_detection_counts(counts: dict) -> str:
 
 def _cpu_temp() -> str:
     """Return CPU temperature in °C, or '—' if unavailable."""
-    try:
-        with open("/sys/class/thermal/thermal_zone0/temp") as f:
-            return f"{int(f.read().strip()) / 1000:.1f}°C"
-    except OSError:
-        return "—"
+    from .metrics import _read_cpu_temp_c
+
+    val = _read_cpu_temp_c()
+    return f"{val:.1f}°C" if val is not None else "—"
 
 
 def _uptime_text() -> str:
@@ -534,6 +533,35 @@ async def detection_fragment(user=Depends(login_manager)):  # noqa: B008
     text = _format_detection_counts(result.get("counts"))
     html = f'Detections: <span aria-live="polite">{text}</span>'
     return _fragment_response(html, selector="#detections", mode="inner")
+
+
+def _render_data_fragment(request: Request) -> str:
+    """Render the /data page body (Chart.js canvases + range selector)."""
+    return templates.env.get_template("_data_content.html.j2").render(request=request)
+
+
+async def data_page(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """SPA page that charts the time-series metrics (CPU temp + detections)."""
+    if _is_fragment_request(request):
+        return _fragment_response(_render_data_fragment(request))
+    return _render_shell(
+        request,
+        _render_data_fragment(request),
+        page_title="Metrics",
+        user=user,
+    )
+
+
+async def metrics_api(range: str = "24h", user=Depends(login_manager)):  # noqa: A002, B008
+    """Return time-series samples as JSON for charting.
+
+    Query params:
+        range: one of 1h, 6h, 24h, 7d, 30d (default 24h)
+    """
+    from .metrics import query_samples
+
+    data = await asyncio.to_thread(query_samples, range)
+    return JSONResponse(content=data)
 
 
 def _make_toast_event(message: str, bg: str = "bg-success") -> str:

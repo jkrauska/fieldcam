@@ -4,385 +4,301 @@ A FastAPI-based web application for scheduling and managing live camera streams 
 
 ## Features
 
-- 🎥 **Live Field Camera Integration** - Capture and serve real-time field images
-- 📅 **Job Scheduling** - Schedule streaming sessions with start/end times
-- 🔐 **User Authentication** - Secure login system with session management
-- 🎬 **Automated Streaming** - Automatically start/stop streams based on schedule
-- 🐳 **Docker Support** - Fully containerized deployment
-- 📊 **Job Management** - Web interface for adding, listing, and removing scheduled jobs
-- 🔄 **Auto-restart** - Automatic container restart on failure
+- **Live Field Camera Integration** - Capture and serve real-time field images
+- **Job Scheduling** - Schedule streaming sessions with start/end times
+- **User Authentication** - Secure login system with session management
+- **Automated Streaming** - Automatically start/stop streams based on schedule
+- **Docker Support** - Single published container, runs anywhere Docker does
+- **Job Management** - Web interface for adding, listing, and removing scheduled jobs
 
-## Prerequisites
+## Run with the published Docker image
 
-- Docker and Docker Compose
-- RTSP camera feed (IP camera with RTSP support)
-- FFmpeg (for image capture via cron)
+The `camapp` container image is automatically built and pushed to GitHub Container Registry (GHCR) on every push to `main` that changes files under `cam-app/`. The published image is the recommended way to run FieldCam.
 
-## Quick Start
+### Prerequisites
 
-### 1. Clone the Repository
+- Docker (24+)
+- A directory on the host for runtime state (`jobs/`, `logs/`)
+- An RTSP-capable IP camera (only required for the camera capture cron, not for the app to start)
+
+### 1. Pull the image
 
 ```bash
-git clone https://github.com/jkrauska/fieldcam.git
-cd fieldcam
+docker pull ghcr.io/jkrauska/fieldcam/camapp:latest
 ```
 
-### 2. Configure Environment Variables
+The image is currently built for `linux/arm64` (Raspberry Pi / Apple Silicon). If you need `linux/amd64`, update `platforms` in `.github/workflows/build-camapp.yml` and rebuild.
 
-Copy the example environment file and configure your settings:
+### 2. Create an `.env` file
+
+Create a working directory and a `.env` file inside it (see `cam-app/.env.example` in the repo for a template you can copy if you cloned it):
 
 ```bash
-cp cam-app/.env.example cam-app/.env
+mkdir -p ~/fieldcam && cd ~/fieldcam
+mkdir -p jobs logs
+touch .env
 ```
 
-Edit `cam-app/.env` with your configuration:
+Minimum required variables:
+
+| Variable         | Description                                                              |
+| ---------------- | ------------------------------------------------------------------------ |
+| `SECRET_KEY`     | Random string for session signing — generate with `openssl rand -hex 32` |
+| `PASSWORDS`      | Comma-separated list of allowed login passwords                          |
+| `ADMIN_PASSWORD` | Password that unlocks the settings page                                  |
+| `CAMERA_IP`      | IP address of the RTSP camera                                            |
+| `CAMERA_USER`    | Camera username                                                          |
+| `CAMERA_PASS`    | Camera password                                                          |
+
+Optional variables:
+
+| Variable               | Default                           | Description                                 |
+| ---------------------- | --------------------------------- | ------------------------------------------- |
+| `TIMEZONE`             | `America/Los_Angeles`             | Timezone for scheduling                     |
+| `COOKIE_NAME`          | `stream411_login`                 | Login cookie name                           |
+| `TOKEN_EXPIRY_MINUTES` | `30`                              | Login session duration in minutes           |
+| `LOCATION`             | `Tepper`                          | Location name shown in UI                   |
+| `BLACKOUT_SEASON`      | —                                 | Shown in schedule form warning              |
+| `BLACKOUT_TEAMS`       | —                                 | Shown in schedule form warning              |
+| `RTMP_GAMECHANGER`     | (preset)                          | RTMP base URL for GameChanger               |
+| `RTMP_YOUTUBE`         | `rtmp://a.rtmp.youtube.com/live2` | RTMP base URL for YouTube                   |
+| `JOBS_DB_PATH`         | `sqlite:///jobs/jobs.sqlite`      | SQLite database path (inside the container) |
+| `FIELD_IMAGE_PATH`     | `/tmp/field.jpg`                  | Path the app reads the field snapshot from  |
+
+Example `.env`:
 
 ```bash
-# Security Settings (REQUIRED)
-SECRET_KEY=your-secret-key-here
-COOKIE_NAME=stream411_login
-
-# Camera Configuration (REQUIRED)
-CAMERA_USER=
-CAMERA_PASS=
-
-# Camera IP (auto-populated by discover-camera.sh)
-CAMERA_IP=
-
-# Application Settings
-LOCATION=Tepper
-LONG_STRING=your-long-string-here
-
-# Authentication
-AUTH_HASH_SFLL=$2b$12$your-bcrypt-hash-here
-PASSWORDS=password1,password2,password3
-
-# Optional Settings
+SECRET_KEY=replace-with-openssl-rand-hex-32
+PASSWORDS=changeme1,changeme2
+ADMIN_PASSWORD=changeme-admin
+CAMERA_IP=192.168.1.50
+CAMERA_USER=admin
+CAMERA_PASS=supersecret
 TIMEZONE=America/Los_Angeles
-TOKEN_EXPIRY_MINUTES=30
-JOBS_DB_PATH=sqlite:///jobs/jobs.sqlite
+LOCATION=Tepper
+RTMP_YOUTUBE=rtmp://a.rtmp.youtube.com/live2
 ```
 
-**Migration from secrets.json**: If you have an existing `secrets.json` file, you can use the migration script:
+### 3. Start the container
 
 ```bash
-cd cam-app
-python migrate_to_env.py
+docker run -d \
+  --name camapp \
+  --restart always \
+  -p 9090:9090 \
+  --env-file .env \
+  -v "$(pwd)/jobs:/code/jobs" \
+  -v "$(pwd)/logs:/code/logs" \
+  -v /tmp/field.jpg:/tmp/field.jpg:ro \
+  ghcr.io/jkrauska/fieldcam/camapp:latest
 ```
 
-### 3. Build and Start
+The app is now available at `http://localhost:9090`. Health check: `GET /health`.
 
-```bash
-# Build the Docker image
-./build.sh
+Notes on the volumes:
 
-# Start the application
-./d-up.sh
-```
+- `jobs/` — SQLite job/state database (must persist across restarts).
+- `logs/` — FFmpeg / app log files.
+- `/tmp/field.jpg` — read-only bind so the container can serve the snapshot the host writes (see step 4). Pre-create the file with `touch /tmp/field.jpg` before starting the container, otherwise Docker will create a directory at that path instead. Skip this mount entirely if you don't yet have a cron capture set up — the app starts fine without it.
 
-The application will be available at `http://localhost:9090`
+Optional mounts:
 
-### 4. Set Up Image Capture (Cron)
+- `-v /sys/class/thermal:/sys/class/thermal:ro` — exposes Pi CPU temperature to the data page.
 
-Add a cron job to capture field snapshots:
+### 4. (Optional) Capture a field snapshot via cron
+
+The app serves the file at `FIELD_IMAGE_PATH` (default `/tmp/field.jpg`) at `/dynamic/field.jpg`. The simplest way to populate it is a host-side cron job using `ffmpeg`:
 
 ```bash
 crontab -e
 ```
 
-Add this line (adjust credentials and IP address):
-
 ```cron
-* * * * * /usr/bin/ffmpeg -hide_banner -loglevel error -y -i rtsp://USERNAME:PASSWORD@IPADDRESS:554/Streaming/channels/102/ -frames:v 1 -q:v 2 /tmp/field.jpg
+* * * * * /usr/bin/ffmpeg -hide_banner -loglevel error -y \
+  -i rtsp://USERNAME:PASSWORD@IPADDRESS:554/Streaming/channels/102/ \
+  -frames:v 1 -q:v 2 /tmp/field.jpg
 ```
 
-The app serves this file at `/dynamic/field.jpg` (configurable via `field_image_path`, default `/tmp/field.jpg`). Using `/tmp` lets the cron job write the image where any user can read it.
+Using `/tmp` keeps the file world-readable so any user (and the bind-mounted container) can read it.
 
-## Project Structure
+### 5. Common operations
 
-```
-fieldcam/
-├── cam-app/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py          # FastAPI application entry point
-│   │   ├── auth.py          # Authentication logic
-│   │   ├── routes.py        # Application routes
-│   │   ├── config.py        # Configuration management
-│   │   ├── scheduler.py     # Job scheduling logic
-│   │   ├── streaming.py     # Streaming management
-│   │   ├── random_names.py  # Stream key generation
-│   │   ├── static/          # Static files (images, favicon)
-│   │   └── templates/       # Jinja2 templates
-│   ├── Dockerfile           # Container definition
-│   ├── pyproject.toml       # Project config and Python dependencies (uv)
-│   └── build.sh             # Docker build script
-├── jobs/                    # SQLite database storage
-├── logs/                    # Application logs
-├── docker-compose.yml       # Docker Compose configuration
-├── d-up.sh                 # Start container script
-├── d-down.sh               # Stop container script
-├── logs.sh                 # View logs script
-└── README.md               # This file
+```bash
+docker logs -f camapp                    # tail logs
+docker restart camapp                    # restart in place
+docker pull ghcr.io/jkrauska/fieldcam/camapp:latest \
+  && docker rm -f camapp \
+  && docker run -d ... (same flags as above)   # update to latest image
 ```
 
 ## API Endpoints
 
 ### Public Endpoints
-- `GET /login` - Login form
-- `POST /login` - Handle login submission
+
+- `GET /login` — Login form
+- `POST /login` — Handle login submission
+- `GET /health` — Health check (for Docker / orchestrator probes)
 
 ### Authenticated Endpoints
-- `GET /dynamic/field.jpg` - Serve current field image (no cache)
-- `GET /list` - List all scheduled jobs
-- `GET /add` - Add new streaming job form
-- `POST /submit` - Submit new streaming job
-- `POST /remove_job` - Remove a scheduled job
-- `GET /logout` - Log out current user
-- `GET /version` - Application version information
+
+- `GET /` — Main SPA shell (list of scheduled jobs)
+- `GET /dynamic/field.jpg` — Serve current field image (no cache)
+- `GET /add` — Add new streaming job form
+- `POST /submit` — Submit new streaming job
+- `POST /remove_job` — Remove a scheduled job
+- `POST /cancel_stream` — Cancel an active stream
+- `GET /data` — Data / metrics page
+- `GET /logout` — Log out current user
+- `GET /version` — Application version information
 
 ## Usage
 
 ### Adding a Streaming Job
 
-1. Navigate to `http://localhost:9090/list`
-2. Log in with your credentials
-3. Click "Add Job" or go to `/add`
+1. Navigate to `http://localhost:9090/`
+2. Log in with one of the passwords from `PASSWORDS` (or `ADMIN_PASSWORD` for admin features)
+3. Click **Add Job**
 4. Fill in the form:
-   - **Team Name**: Name of the team or event
-   - **Date**: Date of the game (YYYY-MM-DD)
-   - **Start Time**: Stream start time (HH:MM)
-   - **End Time**: Stream end time (HH:MM)
-   - **Stream Key**: (Optional) Custom stream key or auto-generated
-5. Click Submit
+   - **Team Name** — Name of the team or event
+   - **Date** — Date of the game (YYYY-MM-DD)
+   - **Start Time** — Stream start time (HH:MM)
+   - **End Time** — Stream end time (HH:MM)
+   - **Stream Key** — (Optional) Custom stream key or auto-generated
+5. Click **Submit**
 
 ### Managing Jobs
 
-- View all scheduled jobs at `/list`
-- Remove jobs by clicking the remove button next to each job
-- Jobs are automatically executed based on their scheduled time
+- View all scheduled jobs on the main page.
+- Remove jobs with the remove button next to each job.
+- Jobs are automatically executed based on their scheduled time.
 
 ### Viewing the Field Camera
 
-Access the live field image at `/dynamic/field.jpg` (requires authentication)
+Access the live field image at `/dynamic/field.jpg` (requires authentication).
 
 ## Development
 
 ### Local Development Setup
 
-#### Prerequisites
+#### Install uv
 
-Install [uv](https://github.com/astral-sh/uv) - a fast Python package installer:
+Install [uv](https://github.com/astral-sh/uv) — a fast Python package installer:
 
 ```bash
-# Install uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Reload your shell or add to PATH
 source $HOME/.local/bin/env
 ```
 
-#### Setting Up the Development Environment
+#### Setting up the environment
 
 ```bash
-# Navigate to the cam-app directory
 cd cam-app
-
-# Create a virtual environment and install all dependencies (prod + dev) with uv
 uv sync --all-extras
-
-# Activate the virtual environment (optional; uv run uses it automatically)
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install pre-commit hooks (for automatic linting/formatting)
 pre-commit install
 ```
 
-#### Running the Application Locally
+#### Running the app locally
 
 ```bash
-# From the cam-app directory (uv uses .venv from pyproject.toml)
 cd cam-app
 uv run uvicorn app.main:app --reload --port 9090
 ```
 
-### Code Quality Tools
+The app loads its config from `cam-app/.env` if present (resolved relative to the `cam-app/` project root, not the current working directory).
 
-This project uses [Ruff](https://github.com/astral-sh/ruff) for linting and formatting.
+### Code Quality
 
-#### Automatic Formatting (Pre-commit Hooks)
-
-Once you've run `pre-commit install`, ruff will automatically:
-- Check for linting issues and auto-fix them
-- Format your code
-
-This happens automatically on every commit.
-
-#### Manual Usage
+This project uses [Ruff](https://github.com/astral-sh/ruff) for linting and formatting. Always run the following from `cam-app/` before committing:
 
 ```bash
-# Check for linting issues
-ruff check .
-
-# Auto-fix linting issues
-ruff check --fix .
-
-# Format all Python files
-ruff format .
-
-# Check a specific file
-ruff check cam-app/app/main.py
+uv run ruff check . && uv run ruff format .
 ```
 
-#### Configuration
+Pre-commit hooks (`pre-commit install`) run these automatically on commit. GitHub Actions also runs ruff checks on every PR — see `.github/workflows/lint.yml`.
 
-Ruff configuration is in `pyproject.toml`:
-- Line length: 100 characters
-- Python version: 3.11
-- Enabled rules: pyflakes, pycodestyle, isort, pep8-naming, pyupgrade, flake8-bugbear, and more
+### Building the Docker image locally
 
-#### Continuous Integration
-
-GitHub Actions automatically runs ruff checks on all pull requests and pushes to main/master branches. The workflow:
-- Checks for linting issues with `ruff check`
-- Verifies code formatting with `ruff format --check`
-
-See `.github/workflows/lint.yml` for the workflow configuration.
-
-### Technology Stack
-
-- **FastAPI** - Modern Python web framework
-- **Uvicorn** - ASGI server
-- **APScheduler** - Job scheduling
-- **SQLAlchemy** - Database ORM
-- **Jinja2** - Template engine
-- **FastAPI-Login** - Authentication
-- **Data-Star** - Lightweight hypermedia frontend (CDN script, no npm); backend-driven UI with HTML patch responses
-- **Docker** - Containerization
-
-### Data-Star integration
-
-The list and add pages use [Data-Star](https://data-star.dev/) so that actions (remove job, cancel stream, submit new stream) update the page via **HTML morphing** instead of full reloads:
-
-- **List page** (`/list`): Remove and Cancel buttons submit via `@post(..., {contentType: 'form'})`. The server returns an HTML fragment for `#list-content`, which Data-Star morphs into the DOM.
-- **Add page** (`/add`): The form uses `data-on:submit="@post('/submit', {contentType: 'form'})"`. On success the server returns a fragment for `#add-form-container` (success message + link back to list).
-
-No frontend build step or Data-Star SDK is required; the client loads the Data-Star script from the CDN, and the backend returns plain HTML fragments with the expected element IDs.
-
-### Building the Docker Image
-
-```bash
-./cam-app/build.sh
-```
-
-Or manually:
+The published image is the canonical build, but you can build locally:
 
 ```bash
 cd cam-app
 docker build -t camapp:latest .
 ```
 
-## Scripts
+For an iterative rebuild loop (Linux only, requires `inotify-tools`):
 
-- **build.sh** - Build the Docker image
-- **d-up.sh** - Start the Docker container
-- **d-down.sh** - Stop the Docker container
-- **logs.sh** - View container logs
+```bash
+cd cam-app
+./build.sh now
+```
 
-## Configuration
+This watches `app/` for changes and rebuilds the image after a 60s debounce. Restart the running container manually after each rebuild (`docker rm -f camapp && docker run ...`).
 
-### Environment Variables
+#### A note on YOLO / `ultralytics`
 
-The application uses Pydantic Settings for configuration management. All configuration is loaded from environment variables (via `.env` file):
+The published image ships **without** the optional `yolo` extra (`ultralytics`, which pulls in `torch` and friends) — adding it roughly triples image size and balloons build time. The app handles this gracefully: detection routes return an `"ultralytics not installed"` error and the rest of the UI keeps working. For local YOLO experimentation use `uv sync --all-extras` and run the app with `uv run uvicorn ...` outside Docker. To build a YOLO-enabled container yourself, see the comment in `cam-app/Dockerfile`.
 
-**Required Variables:**
-- `SECRET_KEY` - Secret key for session management
-- `CAMERA_IP` - Camera IP address
-- `CAMERA_USER` - Camera username
-- `CAMERA_PASS` - Camera password
-- `AUTH_HASH_SFLL` - BCrypt hash for authentication
-- `PASSWORDS` - Comma-separated list of valid passwords
+### Technology Stack
 
-**Optional Variables:**
-- `COOKIE_NAME` - Cookie name for sessions (default: `stream411_login`)
-- `LOCATION` - Location name (default: `Tepper`)
-- `TIMEZONE` - Timezone for scheduling (default: `America/Los_Angeles`)
-- `TOKEN_EXPIRY_MINUTES` - Session token expiry (default: `30`)
-- `JOBS_DB_PATH` - SQLite database path (default: `sqlite:///jobs/jobs.sqlite`)
+- **FastAPI** — Modern Python web framework
+- **Uvicorn** — ASGI server
+- **APScheduler** — Job scheduling
+- **SQLAlchemy** — Database ORM
+- **Jinja2** — Template engine
+- **FastAPI-Login** — Authentication
+- **Datastar** — Lightweight hypermedia frontend (CDN script, no npm); backend-driven UI with HTML patch responses
+- **Docker** — Containerization
 
-### Docker Configuration
+### Datastar integration
 
-- Port: `9090` (mapped in docker-compose.yml)
-- Environment file: `cam-app/.env` (loaded via docker-compose.yml)
+The list and add pages use [Datastar](https://data-star.dev/) so that actions (remove job, cancel stream, submit new stream) update the page via **HTML morphing** instead of full reloads:
 
-### Docker Volumes
+- **List page** (`/`): Remove and Cancel buttons submit via `@post(..., {contentType: 'form'})`. The server returns an HTML fragment for `#list-content`, which Datastar morphs into the DOM.
+- **Add page** (`/add`): The form uses `data-on:submit="@post('/submit', {contentType: 'form'})"`. On success the server returns a fragment for `#add-form-container` (success message + link back to list).
 
-- `./cam-app/app/static` → `/code/app/static` - Field images
-- `./jobs` → `/code/jobs` - SQLite database
-- `./logs` → `/code/logs` - Application logs
+No frontend build step or Datastar SDK is required; the client loads the Datastar script from the CDN, and the backend returns plain HTML fragments with the expected element IDs.
 
 ## Troubleshooting
 
-### Container Issues
+### Container
 
 ```bash
-# View logs
-./logs.sh
-# or
-docker logs camapp
-
-# Restart container
-./d-down.sh && ./d-up.sh
-
-# Rebuild and restart
-./cam-app/build.sh && ./d-down.sh && ./d-up.sh
+docker logs -f camapp                  # follow logs
+docker restart camapp                  # restart
+docker exec -it camapp /bin/sh         # shell into the container
 ```
 
-### Image Not Updating
+### Field image not updating
 
-Check if the cron job is running:
+Check the host cron job is running:
+
 ```bash
 crontab -l
 ```
 
-Verify FFmpeg can access your camera:
+Verify FFmpeg can talk to the camera:
+
 ```bash
 ffmpeg -i rtsp://USERNAME:PASSWORD@IPADDRESS:554/Streaming/channels/102/ -frames:v 1 test.jpg
 ```
 
-### Login Issues
+### Login issues
 
-Verify your `.env` file exists and contains valid credentials:
+Verify your `.env` file is being read by the container:
 
 ```bash
-# Check if .env file exists
-ls -la cam-app/.env
-
-# Verify required variables are set
-grep -E "SECRET_KEY|CAMERA_IP|AUTH_HASH_SFLL" cam-app/.env
+docker exec camapp env | grep -E "SECRET_KEY|CAMERA_IP|PASSWORDS"
 ```
 
-### Configuration Issues
+If those are empty, the `--env-file` path is wrong or the variables are missing from the file.
 
-If you encounter configuration errors:
+### Configuration
 
-1. Ensure all required environment variables are set in `cam-app/.env`
-2. Check that the `.env` file is being loaded by docker-compose
-3. Verify the format of environment variables (no quotes needed for most values)
-4. For comma-separated values like `PASSWORDS`, ensure no spaces after commas
-
-## Future Improvements
-
-- [ ] Move image capture to Docker container (eliminate cron dependency)
-- [ ] Add support for multiple camera feeds
-- [ ] Implement RTMP/HLS streaming output
-- [ ] Add email notifications for scheduled jobs
-- [ ] Create admin dashboard with analytics
-- [ ] Add API key authentication for programmatic access
+If the container exits immediately with a "Missing required configuration" message, one of the required variables (`SECRET_KEY`, etc.) is missing or empty. Re-check the `.env` file against the table above.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome — please open a pull request.
 
 ## License
 

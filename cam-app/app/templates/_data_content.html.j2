@@ -1,0 +1,130 @@
+{# Rendered inside <main id="app-content">. Charts CPU temp + YOLO detection counts. #}
+<div class="container">
+    <div class="d-flex align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="me-3 mb-0"><i class="bi bi-graph-up"></i> Metrics</h3>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+            {% for key, label in [("1h","1h"), ("6h","6h"), ("24h","24h"), ("7d","7d"), ("30d","30d")] %}
+            <button type="button"
+                    class="btn btn-outline-secondary metrics-range-btn"
+                    data-range="{{ key }}"
+                    {% if key == "24h" %}aria-pressed="true"{% endif %}>{{ label }}</button>
+            {% endfor %}
+        </div>
+        <span id="metrics-status" class="text-muted small ms-2" aria-live="polite">Loading…</span>
+        <a href="/" class="btn btn-sm btn-link ms-auto"><i class="bi bi-arrow-left"></i> Back</a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-2"><strong>CPU temperature</strong> <span class="text-muted small">°C</span></div>
+        <div class="card-body" style="position:relative; height:260px">
+            <canvas id="chart-cpu"></canvas>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-2"><strong>Detections</strong> <span class="text-muted small">objects per frame</span></div>
+        <div class="card-body" style="position:relative; height:260px">
+            <canvas id="chart-det"></canvas>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    // Avoid re-binding when this fragment is morphed back in by the SPA router.
+    if (window.__metricsBound) {
+        window.__metricsReload && window.__metricsReload();
+        return;
+    }
+    window.__metricsBound = true;
+
+    var status = document.getElementById('metrics-status');
+    var cpuCtx = document.getElementById('chart-cpu').getContext('2d');
+    var detCtx = document.getElementById('chart-det').getContext('2d');
+    var currentRange = '24h';
+
+    function fmtTs(ts) {
+        var d = new Date(ts * 1000);
+        return d.toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    var commonOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        spanGaps: true,
+        plugins: { legend: { display: true, position: 'bottom' } },
+        scales: {
+            x: { ticks: { autoSkip: true, maxTicksLimit: 8 } },
+            y: { beginAtZero: false },
+        },
+        elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0.2 } },
+    };
+
+    var cpuChart = new Chart(cpuCtx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'CPU °C', data: [], borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.15)', fill: true }] },
+        options: commonOpts,
+    });
+
+    var detChart = new Chart(detCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'people', data: [], borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.15)', fill: false },
+                { label: 'birds',  data: [], borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.15)', fill: false },
+                { label: 'total',  data: [], borderColor: '#6c757d', backgroundColor: 'rgba(108,117,125,0.15)', fill: false, borderDash: [4, 4] },
+            ],
+        },
+        options: Object.assign({}, commonOpts, { scales: { x: commonOpts.scales.x, y: { beginAtZero: true, ticks: { precision: 0 } } } }),
+    });
+
+    function load(range) {
+        status.textContent = 'Loading…';
+        fetch('/api/metrics?range=' + encodeURIComponent(range), { credentials: 'same-origin' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                var labels = data.ts.map(fmtTs);
+                cpuChart.data.labels = labels;
+                cpuChart.data.datasets[0].data = data.cpu_temp_c;
+                cpuChart.update();
+                detChart.data.labels = labels;
+                detChart.data.datasets[0].data = data.person;
+                detChart.data.datasets[1].data = data.bird;
+                detChart.data.datasets[2].data = data.total;
+                detChart.update();
+                var n = data.ts.length;
+                status.textContent = n ? (n + ' samples · range ' + data.range) : 'No samples yet — wait a minute and try again.';
+            })
+            .catch(function (err) {
+                status.textContent = 'Error: ' + err.message;
+            });
+    }
+
+    window.__metricsReload = function () { load(currentRange); };
+
+    document.querySelectorAll('.metrics-range-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            currentRange = btn.dataset.range;
+            document.querySelectorAll('.metrics-range-btn').forEach(function (b) {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
+            btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
+            load(currentRange);
+        });
+        if (btn.dataset.range === currentRange) btn.classList.add('active');
+    });
+
+    var refreshTimer = setInterval(function () { load(currentRange); }, 60000);
+    window.addEventListener('beforeunload', function () { clearInterval(refreshTimer); });
+
+    load(currentRange);
+})();
+</script>
