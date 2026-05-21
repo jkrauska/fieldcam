@@ -38,7 +38,12 @@
                         <i class="bi bi-broadcast-pin"></i> LIVE
                     </span>
                 </td>
-                <td>{{ stream.job_name | clean_name }}</td>
+                <td>
+                    {{ stream.job_name | clean_name }}
+                    {% if stream.streamer_name %}
+                    <div class="text-muted small">by {{ stream.streamer_name }}</div>
+                    {% endif %}
+                </td>
                 <td>
                     {% if stream.destination == 'youtube' %}<span class="badge bg-danger">YT</span>
                     {% elif stream.destination == 'custom' %}<span class="badge bg-primary">Custom</span>
@@ -81,7 +86,12 @@
                         <i class="bi bi-calendar-event"></i> Scheduled
                     </span>
                 </td>
-                <td>{{ job.name | clean_name }}</td>
+                <td>
+                    {{ job.name | clean_name }}
+                    {% if job.kwargs.streamer_name %}
+                    <div class="text-muted small">by {{ job.kwargs.streamer_name }}</div>
+                    {% endif %}
+                </td>
                 <td>
                     {% set dest = job.kwargs.destination | default('gamechanger') %}
                     {% if dest == 'youtube' %}<span class="badge bg-danger">YT</span>

@@ -17,7 +17,7 @@ from .auth import (
 )
 
 # Import configuration and setup
-from .config import log_observed_config, login_manager
+from .config import log_observed_config, login_manager, settings
 from .database import init_db
 from .routes import (
     add_job_page,
@@ -53,6 +53,11 @@ logging.basicConfig(
     datefmt=LOG_DATEFMT,
 )
 
+# Silence httpx's per-request INFO logging. Hikvision ISAPI uses HTTP Digest auth,
+# which always emits a 401 challenge before the authenticated 200 — noisy and harmless.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 
 def _override_uvicorn_loggers():
     """Override uvicorn's loggers to use the same format as the rest of the app."""
@@ -85,7 +90,10 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 async def startup_event():
     """Initialize database and start background tasks on application startup."""
     _override_uvicorn_loggers()
-    log_observed_config(logging.getLogger("app.config"))
+    if settings.debug:
+        log_observed_config(logging.getLogger("app.config"))
+    else:
+        logging.info("Config dump suppressed (set DEBUG=1 to enable)")
     init_db()
     start_cleanup_task()
     logging.info("Application startup complete - database and cleanup task initialized")

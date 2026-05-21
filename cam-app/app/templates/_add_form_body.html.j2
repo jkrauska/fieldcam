@@ -16,6 +16,12 @@ form .col-form-label { width: 8.5rem; flex: 0 0 auto; }
         </div>
     </div>
     <div class="row mb-2 align-items-center">
+        <label for="add-streamerName" class="col-auto col-form-label"><b>Streamer Name:</b></label>
+        <div class="col">
+            <input type="text" class="form-control" id="add-streamerName" name="streamerName" placeholder="Your name (in case we need to reach you)">
+        </div>
+    </div>
+    <div class="row mb-2 align-items-center">
         <label for="add-date" class="col-auto col-form-label"><b>Date:</b></label>
         <div class="col">
             <input type="date" class="form-control" id="add-date" name="date" value="{{ default_date }}" required>

@@ -84,9 +84,9 @@ RTMP_YOUTUBE=rtmp://a.rtmp.youtube.com/live2
 ```bash
 docker run -d \
   --name camapp \
-  --restart always \
+  --restart unless-stopped \
   -p 9090:9090 \
-  --env-file .env \
+  -v "$(pwd)/.env:/code/.env" \
   -v "$(pwd)/jobs:/code/jobs" \
   -v "$(pwd)/logs:/code/logs" \
   -v /tmp/field.jpg:/tmp/field.jpg:ro \
@@ -97,6 +97,7 @@ The app is now available at `http://localhost:9090`. Health check: `GET /health`
 
 Notes on the volumes:
 
+- `.env` — bind-mounted so the in-app **Settings** page (admin only) can persist edits back to the host file. On save it rewrites `.env` and SIGTERMs the process; the `--restart unless-stopped` policy then brings the container back with the new values. Without this mount, settings edits are silently discarded on restart. (You can substitute `--env-file .env` if you don't need the in-app editor — values will still load at boot — but writes from the Settings page won't survive.)
 - `jobs/` — SQLite job/state database (must persist across restarts).
 - `logs/` — FFmpeg / app log files.
 - `/tmp/field.jpg` — read-only bind so the container can serve the snapshot the host writes (see step 4). Pre-create the file with `touch /tmp/field.jpg` before starting the container, otherwise Docker will create a directory at that path instead. Skip this mount entirely if you don't yet have a cron capture set up — the app starts fine without it.

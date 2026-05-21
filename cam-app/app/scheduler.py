@@ -3,13 +3,18 @@
 import logging
 from datetime import datetime, timedelta
 
-from apscheduler.jobstores.base import ConflictingIdError
+from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
 
-from .config import LOCAL_TZ, scheduler
+from .config import LOCAL_TZ, camera_configured, missing_camera_fields, scheduler
 from .database import cancel_active_stream, cleanup_stale_streams
 from .metrics import prune_old_samples, sample_metrics
 from .random_names import generate_name
 from .streaming import snapshot_field_image, stream_game
+
+# Job IDs that depend on the camera being configured. Centralized so the
+# auto-stop logic in start_cleanup_task can both refuse to schedule and remove
+# any stale entries left behind by a previous run that had credentials.
+_CAMERA_JOB_IDS: tuple[str, ...] = ("HIDDEN_snapshot_field",)
 
 
 def new_stream(
@@ -19,6 +24,7 @@ def new_stream(
     key="",
     destination="gamechanger",
     custom_url="",
+    streamer_name="",
 ):
     """
     Schedule a new stream job.
@@ -30,12 +36,13 @@ def new_stream(
         key: Stream key for the destination service
         destination: Target service — "gamechanger", "youtube", or "custom"
         custom_url: Full RTMP base URL when destination is "custom"
+        streamer_name: Optional contact name for the person operating the stream
 
     Returns:
         The name of the scheduled job
     """
 
-    logging.info(f"New Stream: {name} {start_time} {duration} {key} -> {destination}")
+    logging.info(f"New Stream: {name} {start_time} {duration} {key} -> {destination} (streamer={streamer_name or '-'})")
     now = datetime.now().astimezone(LOCAL_TZ)
 
     if not name:
@@ -53,11 +60,16 @@ def new_stream(
     if not key:
         raise ValueError("Stream key is required")
 
+    if not camera_configured():
+        missing = ", ".join(missing_camera_fields())
+        raise ValueError(f"Camera is not configured (missing: {missing}). Set camera credentials in the Settings page before scheduling streams.")
+
     kwargs = {
         "duration": duration,
         "key": key,
         "name": name,
         "destination": destination,
+        "streamer_name": streamer_name,
     }
     if destination == "custom" and custom_url:
         kwargs["custom_url"] = custom_url
@@ -103,11 +115,34 @@ def remove_job(job_id: str):
     scheduler.remove_job(job_id)
 
 
+def _remove_camera_jobs(reason: str) -> None:
+    """Remove any persisted camera-dependent jobs. Idempotent."""
+    for job_id in _CAMERA_JOB_IDS:
+        try:
+            scheduler.remove_job(job_id)
+            logging.warning("Removed stale job %s (%s)", job_id, reason)
+        except JobLookupError:
+            pass
+
+
 def start_cleanup_task():
     """
-    Start periodic cleanup task to check for dead stream processes.
+    Start periodic background tasks.
 
-    Runs every 5 minutes to verify running streams are still active.
+    Always-on tasks (do not require camera credentials):
+      - stale-stream cleanup
+      - metric sampling (CPU temp + cached YOLO counts)
+      - metric retention pruning
+
+    Camera-dependent tasks (only scheduled when camera credentials are set):
+      - field snapshot grab (every 60s)
+      - initial YOLO detection cache warm-up
+
+    When the camera is NOT configured, camera-dependent jobs are explicitly
+    REMOVED from the persistent jobstore so a previous run's snapshot job
+    doesn't keep running silently. This is the auto-stop condition: a
+    misconfigured deployment will log a clear error instead of pretending
+    the snapshot job is "executed successfully" every minute.
     """
     try:
         scheduler.add_job(
@@ -121,27 +156,35 @@ def start_cleanup_task():
     except ConflictingIdError:
         logging.info("Cleanup task already running")
 
-    # Grab a field camera snapshot every 60 seconds
-    scheduler.add_job(
-        snapshot_field_image,
-        trigger="interval",
-        seconds=60,
-        id="HIDDEN_snapshot_field",
-        name="HIDDEN_snapshot_field",
-        replace_existing=True,
-    )
-    # Take one immediately at startup, then warm the detection cache
-    snapshot_field_image()
-    logging.info("Started field snapshot task (every 60s)")
+    if camera_configured():
+        scheduler.add_job(
+            snapshot_field_image,
+            trigger="interval",
+            seconds=60,
+            id="HIDDEN_snapshot_field",
+            name="HIDDEN_snapshot_field",
+            replace_existing=True,
+        )
+        snapshot_field_image()
+        logging.info("Started field snapshot task (every 60s)")
 
-    import threading
+        import threading
 
-    from .routes import _refresh_detection_cache
+        from .routes import _refresh_detection_cache
 
-    threading.Thread(target=_refresh_detection_cache, daemon=True).start()
-    logging.info("Kicked off background detection cache warm-up")
+        threading.Thread(target=_refresh_detection_cache, daemon=True).start()
+        logging.info("Kicked off background detection cache warm-up")
+    else:
+        missing = ", ".join(missing_camera_fields())
+        logging.error(
+            "Camera not configured (missing: %s) — field snapshot job NOT scheduled. "
+            "Streams cannot be recorded until camera credentials are set in the Settings page.",
+            missing,
+        )
+        _remove_camera_jobs("camera not configured")
 
-    # Sample CPU temp + detection counts into the metric_samples table every 60s
+    # Sample CPU temp + detection counts into the metric_samples table every 60s.
+    # Runs regardless of camera config so we still capture CPU temp.
     scheduler.add_job(
         sample_metrics,
         trigger="interval",

@@ -7,7 +7,7 @@ import threading
 
 import httpx
 
-from .config import settings
+from .config import camera_configured, missing_camera_fields, settings
 from .database import add_active_stream, update_stream_status
 from .event_bus import clear_stream_stats, update_stream_stats
 
@@ -49,9 +49,15 @@ def input_cam_url() -> str:
 
 
 def snapshot_field_image():
-    """Grab a JPEG snapshot from the Hikvision ISAPI endpoint (sub-stream, channel 102)."""
-    if not settings.camera_ip:
-        return
+    """Grab a JPEG snapshot from the Hikvision ISAPI endpoint (sub-stream, channel 102).
+
+    Raises RuntimeError when the camera is not fully configured. Surfacing this
+    as a real failure means APScheduler logs it as a job error (instead of the
+    misleading "executed successfully") and any direct caller can react.
+    """
+    if not camera_configured():
+        missing = ", ".join(missing_camera_fields())
+        raise RuntimeError(f"Cannot snapshot field image — camera not configured (missing: {missing})")
     url = f"http://{settings.camera_ip}/ISAPI/Streaming/channels/102/picture"
     auth = httpx.DigestAuth(settings.camera_user, settings.camera_pass)
     output = settings.field_image_path
@@ -109,7 +115,7 @@ def _parse_progress(block: dict[str, str]) -> dict:
     }
 
 
-def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", custom_url=""):
+def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", custom_url="", streamer_name=""):
     """
     Stream a game from the camera to an RTMP destination.
 
@@ -119,16 +125,18 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         name: Name of the stream for logging purposes
         destination: Target service — "gamechanger", "youtube", or "custom"
         custom_url: Full RTMP base URL when destination is "custom"
+        streamer_name: Optional contact name for the person operating the stream
 
     Returns:
         Return code from FFmpeg process
     """
-    logging.info(f"Starting stream to {destination}...")
+    logging.info(f"Starting stream to {destination} (streamer={streamer_name or '-'})...")
     pretty_name = name.replace(" ", "_")
     duration = int(duration)
 
-    if not settings.camera_ip:
-        logging.error("CAMERA_IP is not set; cannot start stream")
+    if not camera_configured():
+        missing = ", ".join(missing_camera_fields())
+        logging.error("Camera not configured (missing: %s); cannot start stream", missing)
         return
 
     input_cam = input_cam_url()
@@ -184,6 +192,7 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
             duration=duration,
             stream_key=key,
             destination=destination,
+            streamer_name=streamer_name,
         )
     except Exception as e:
         logging.error(f"Failed to register stream in database: {e}")
