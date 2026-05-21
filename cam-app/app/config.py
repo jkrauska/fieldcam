@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi_login import LoginManager
-from pydantic import ValidationError
+from pydantic import AliasChoices, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve .env relative to project root (cam-app), so it works regardless of CWD
@@ -36,13 +36,30 @@ class Settings(BaseSettings):
     secret_key: str
     cookie_name: str = "stream411_login"
 
-    # Camera configuration (env: CAMERA_IP, CAMERA_USER, CAMERA_PASS)
-    camera_ip: str = ""
-    camera_user: str = ""
-    camera_pass: str = ""
+    # Camera configuration.
+    # Accept legacy CAM_HOST/CAM_USER/CAM_PASS aliases in addition to the
+    # current CAMERA_IP/CAMERA_USER/CAMERA_PASS names. Legacy names emit a
+    # deprecation warning at startup (see log_observed_config).
+    camera_ip: str = Field(
+        default="",
+        validation_alias=AliasChoices("camera_ip", "cam_host"),
+    )
+    camera_user: str = Field(
+        default="",
+        validation_alias=AliasChoices("camera_user", "cam_user"),
+    )
+    camera_pass: str = Field(
+        default="",
+        validation_alias=AliasChoices("camera_pass", "cam_pass"),
+    )
 
     # Application settings
     location: str = "Tepper"
+
+    # When true, dump the resolved configuration to the log at startup.
+    # Off by default to keep production logs quiet. Enable via DEBUG=1
+    # (or true/yes/on) in the process environment / .env file.
+    debug: bool = False
 
     # Authentication
     auth_hash_sfll: str = ""
@@ -107,6 +124,52 @@ _SENSITIVE_FIELDS: frozenset[str] = frozenset(
 )
 
 
+# Legacy env var names -> current canonical names. Listed for backward
+# compatibility with older .env files. Detected at startup and warned about
+# in log_observed_config().
+_LEGACY_ENV_ALIASES: dict[str, str] = {
+    "CAM_HOST": "CAMERA_IP",
+    "CAM_USER": "CAMERA_USER",
+    "CAM_PASS": "CAMERA_PASS",
+}
+
+
+def _env_file_keys() -> set[str]:
+    """Return the set of upper-cased keys present in the .env file (if any)."""
+    keys: set[str] = set()
+    if not _ENV_FILE.is_file():
+        return keys
+    try:
+        for raw in _ENV_FILE.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            keys.add(line.partition("=")[0].strip().upper())
+    except OSError:
+        pass
+    return keys
+
+
+def _detect_legacy_env_aliases() -> dict[str, str]:
+    """Return {legacy_name: canonical_name} for any deprecated env vars in use."""
+    file_keys = _env_file_keys()
+    found: dict[str, str] = {}
+    for legacy, canonical in _LEGACY_ENV_ALIASES.items():
+        if legacy in os.environ or legacy in file_keys:
+            found[legacy] = canonical
+    return found
+
+
+def camera_configured() -> bool:
+    """True only when all required camera credentials are set."""
+    return bool(settings.camera_ip and settings.camera_user and settings.camera_pass)
+
+
+def missing_camera_fields() -> list[str]:
+    """Return the names of any unset required camera settings."""
+    return [name for name in ("camera_ip", "camera_user", "camera_pass") if not getattr(settings, name)]
+
+
 def _redact(name: str, value: object) -> str:
     """Return a log-safe representation of a setting value."""
     if name in _SENSITIVE_FIELDS:
@@ -152,6 +215,16 @@ def log_observed_config(log: logging.Logger | None = None) -> None:
             log.info("  %s = %s", env_key, _redact(name, os.environ[env_key]))
     if not any_env:
         log.info("  (none — no matching env vars set in this process)")
+
+    # Warn about any deprecated env var names still in use. We still honor
+    # them via Settings AliasChoices, but they should be renamed.
+    for legacy, canonical in _detect_legacy_env_aliases().items():
+        log.warning(
+            "DEPRECATED env var %s detected — please rename to %s in %s. Legacy name is still accepted but will be removed in a future release.",
+            legacy,
+            canonical,
+            _ENV_FILE,
+        )
 
 
 def _resolve_jobs_db_url(url: str) -> str:

@@ -26,6 +26,7 @@ class ActiveStream(Base):
     duration = Column(Integer, nullable=False)
     stream_key = Column(String)
     destination = Column(String, default="gamechanger")
+    streamer_name = Column(String)  # Person operating the stream (optional contact info)
     status = Column(String, default="running")  # running, completed, cancelled, failed
     error_message = Column(Text)
     created_at = Column(String, default=lambda: datetime.now(UTC).isoformat())
@@ -68,10 +69,25 @@ def init_db():
             logging.info("Migration: added 'destination' column to active_streams")
         except Exception:
             logging.warning("Migration failed: could not add 'destination' column", exc_info=True)
+    if "streamer_name" not in columns:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE active_streams ADD COLUMN streamer_name TEXT"))
+                conn.commit()
+            logging.info("Migration: added 'streamer_name' column to active_streams")
+        except Exception:
+            logging.warning("Migration failed: could not add 'streamer_name' column", exc_info=True)
     logging.info("Database initialized - active_streams table ready")
 
 
-def add_active_stream(job_name: str, pid: int, duration: int, stream_key: str = "", destination: str = "gamechanger"):
+def add_active_stream(
+    job_name: str,
+    pid: int,
+    duration: int,
+    stream_key: str = "",
+    destination: str = "gamechanger",
+    streamer_name: str = "",
+):
     """Register a new active stream in the database."""
     session = SessionLocal()
     try:
@@ -82,6 +98,7 @@ def add_active_stream(job_name: str, pid: int, duration: int, stream_key: str = 
             duration=duration,
             stream_key=stream_key,
             destination=destination,
+            streamer_name=streamer_name or None,
             status="running",
         )
         session.add(stream)

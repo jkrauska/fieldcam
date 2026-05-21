@@ -3,6 +3,8 @@
 import asyncio
 import json
 import logging
+import os
+import signal
 import threading
 import time
 import uuid
@@ -351,6 +353,7 @@ async def submit_job(
     stream_key: str = Form(..., alias="streamKey"),
     destination: str = Form("gamechanger"),
     custom_url: str = Form("", alias="customUrl"),
+    streamer_name: str = Form("", alias="streamerName"),
     user=Depends(login_manager),  # noqa: B008
 ):
     """
@@ -358,9 +361,11 @@ async def submit_job(
 
     Parses and validates the form data, then schedules a new stream job.
     """
+    streamer_name = streamer_name.strip()
     logging.info(
         f"Received form data from {user}: {team_name}, {date}, {start_time}, "
-        f"duration={duration_hours}h{duration_minutes}m, {stream_key}, destination={destination}"
+        f"duration={duration_hours}h{duration_minutes}m, {stream_key}, destination={destination}, "
+        f"streamer={streamer_name or '-'}"
     )
 
     # --- Input validation ---
@@ -421,6 +426,7 @@ async def submit_job(
         key=stream_key,
         destination=destination,
         custom_url=custom_url,
+        streamer_name=streamer_name,
     )
     notify_list_changed()
 
@@ -783,6 +789,27 @@ def _read_env_values() -> dict[str, str]:
     return values
 
 
+def _schedule_process_exit(delay: float = 2.0) -> None:
+    """Send SIGTERM to ourselves after `delay` seconds so uvicorn shuts down gracefully.
+
+    Used by /settings/save to trigger a container restart so the new .env values are
+    picked up by a fresh process. The deployment must run the container with a restart
+    policy (e.g. `docker run --restart=unless-stopped` or compose `restart: unless-stopped`)
+    so the orchestrator brings the app back up automatically. The short delay lets the
+    SSE response (toast + scheduled browser reload) flush to the client first.
+    """
+
+    def _terminate() -> None:
+        pid = os.getpid()
+        logging.warning("Settings restart: sending SIGTERM to self (pid=%s)", pid)
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except Exception as exc:  # pragma: no cover - defensive
+            logging.error("Failed to send SIGTERM for settings restart: %s", exc)
+
+    threading.Timer(delay, _terminate).start()
+
+
 def _write_env_values(values: dict[str, str]):
     """Rewrite the .env file preserving comments and updating/adding values."""
     lines = []
@@ -832,17 +859,22 @@ async def save_settings(request: Request, user=Depends(login_manager)):  # noqa:
             env_values[key] = form_val
 
     _write_env_values(env_values)
-    logging.info("Settings saved to .env — restarting application")
+    logging.info("Settings saved to .env at %s — scheduling process restart", _ENV_FILE)
 
-    # Touch this file so uvicorn's file watcher triggers a reload
-    Path(__file__).touch()
+    # Trigger graceful shutdown so the container/process supervisor restarts us
+    # with the new .env loaded. In dev (uvicorn --reload / fastapi dev) this still
+    # works because the watcher restarts on SIGTERM exit; in prod we rely on the
+    # container's restart policy. See cam-app/Dockerfile for required deploy flags.
+    _schedule_process_exit(delay=2.0)
 
-    # Close modal, show toast, and reload page after server has restarted
+    # Close modal, show toast, and reload page after server has restarted.
+    # Reload delay must be > _schedule_process_exit delay + uvicorn graceful
+    # shutdown + container start time, so give it 10s of headroom.
     return DatastarResponse(
         [
             SSE.patch_signals({"showSettingsModal": False}),
             _make_toast_event("Settings saved — restarting...", "bg-success"),
-            SSE.execute_script("setTimeout(() => window.location.reload(), 5000)"),
+            SSE.execute_script("setTimeout(() => window.location.reload(), 10000)"),
         ]
     )
 
