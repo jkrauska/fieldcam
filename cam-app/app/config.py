@@ -2,6 +2,7 @@
 
 import atexit
 import hashlib
+import logging
 import os
 import sys
 from datetime import timedelta
@@ -92,6 +93,65 @@ except ValidationError as exc:
     else:
         print(f"\n*** Configuration error ***\n{exc}\n", file=sys.stderr)
     sys.exit(1)
+
+
+# Fields whose values should never be logged in plaintext.
+_SENSITIVE_FIELDS: frozenset[str] = frozenset(
+    {
+        "secret_key",
+        "camera_pass",
+        "auth_hash_sfll",
+        "passwords",
+        "admin_password",
+    }
+)
+
+
+def _redact(name: str, value: object) -> str:
+    """Return a log-safe representation of a setting value."""
+    if name in _SENSITIVE_FIELDS:
+        if value in (None, ""):
+            return "<empty>"
+        text = str(value)
+        # Show only length + a short fingerprint so we can tell if the value changed.
+        digest = hashlib.sha256(text.encode()).hexdigest()[:8]
+        return f"<set, len={len(text)}, sha256[:8]={digest}>"
+    if value == "":
+        return "<empty>"
+    return repr(value)
+
+
+def log_observed_config(log: logging.Logger | None = None) -> None:
+    """Log resolved Settings plus which env vars the process actually sees.
+
+    Sensitive values are redacted. Useful at startup to verify whether
+    environment variables / .env are being picked up.
+    """
+    log = log or logging.getLogger(__name__)
+
+    log.info("Config: project root = %s", _PROJECT_ROOT)
+    if _ENV_FILE.is_file():
+        log.info("Config: .env loaded from %s", _ENV_FILE)
+    else:
+        log.info("Config: no .env file at %s (using process env only)", _ENV_FILE)
+
+    log.info("Config: resolved Settings (sensitive values redacted):")
+    for name in sorted(settings.model_fields):
+        value = getattr(settings, name)
+        log.info("  settings.%s = %s", name, _redact(name, value))
+
+    # Also report which matching env vars are present in the process. This
+    # helps diagnose cases where the process didn't actually receive the env
+    # vars you expect (e.g. wrong shell, missing docker --env-file, etc.).
+    log.info("Config: matching environment variables seen in process:")
+    any_env = False
+    for name in sorted(settings.model_fields):
+        env_key = name.upper()
+        if env_key in os.environ:
+            any_env = True
+            log.info("  %s = %s", env_key, _redact(name, os.environ[env_key]))
+    if not any_env:
+        log.info("  (none — no matching env vars set in this process)")
 
 
 def _resolve_jobs_db_url(url: str) -> str:

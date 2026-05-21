@@ -4,7 +4,7 @@ FROM python:3.11-slim-bullseye AS base-os
 # Install FFmpeg and other system dependencies
 # This layer will be cached and reused unless the base image changes
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg iputils-ping procps \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

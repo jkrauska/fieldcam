@@ -17,7 +17,7 @@ from .auth import (
 )
 
 # Import configuration and setup
-from .config import login_manager
+from .config import log_observed_config, login_manager
 from .database import init_db
 from .routes import (
     add_job_page,
@@ -85,6 +85,7 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 async def startup_event():
     """Initialize database and start background tasks on application startup."""
     _override_uvicorn_loggers()
+    log_observed_config(logging.getLogger("app.config"))
     init_db()
     start_cleanup_task()
     logging.info("Application startup complete - database and cleanup task initialized")
