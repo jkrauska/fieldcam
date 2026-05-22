@@ -27,6 +27,16 @@
             <canvas id="chart-det"></canvas>
         </div>
     </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-2">
+            <strong>Camera ping</strong>
+            <span class="text-muted small">RTT (ms) · gaps = unreachable</span>
+        </div>
+        <div class="card-body" style="position:relative; height:260px">
+            <canvas id="chart-ping"></canvas>
+        </div>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -42,6 +52,7 @@
     var status = document.getElementById('metrics-status');
     var cpuCtx = document.getElementById('chart-cpu').getContext('2d');
     var detCtx = document.getElementById('chart-det').getContext('2d');
+    var pingCtx = document.getElementById('chart-ping').getContext('2d');
     var currentRange = '24h';
 
     function fmtTs(ts) {
@@ -62,6 +73,15 @@
         elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0.2 } },
     };
 
+    // Ping chart: don't span gaps so unreachable periods show as visible breaks.
+    var pingOpts = Object.assign({}, commonOpts, {
+        spanGaps: false,
+        scales: {
+            x: commonOpts.scales.x,
+            y: { beginAtZero: true, title: { display: true, text: 'ms' } },
+        },
+    });
+
     var cpuChart = new Chart(cpuCtx, {
         type: 'line',
         data: { labels: [], datasets: [{ label: 'CPU °C', data: [], borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.15)', fill: true }] },
@@ -81,6 +101,17 @@
         options: Object.assign({}, commonOpts, { scales: { x: commonOpts.scales.x, y: { beginAtZero: true, ticks: { precision: 0 } } } }),
     });
 
+    var pingChart = new Chart(pingCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'camera RTT (ms)', data: [], borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,0.15)', fill: true },
+            ],
+        },
+        options: pingOpts,
+    });
+
     function load(range) {
         status.textContent = 'Loading…';
         fetch('/api/metrics?range=' + encodeURIComponent(range), { credentials: 'same-origin' })
@@ -98,6 +129,9 @@
                 detChart.data.datasets[1].data = data.bird;
                 detChart.data.datasets[2].data = data.total;
                 detChart.update();
+                pingChart.data.labels = labels;
+                pingChart.data.datasets[0].data = data.camera_ping_ms || [];
+                pingChart.update();
                 var n = data.ts.length;
                 status.textContent = n ? (n + ' samples · range ' + data.range) : 'No samples yet — wait a minute and try again.';
             })
