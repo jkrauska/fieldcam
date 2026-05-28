@@ -611,7 +611,7 @@ async def detection_api(user=Depends(login_manager)):  # noqa: B008
 
     Returns JSON with counts per class, total, details, etc.
     """
-    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path)
+    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path, model_name=settings.yolo_model)
     if result.get("error") and result.get("counts") is None:
         raise HTTPException(
             status_code=503 if "not installed" in result.get("error", "") else 404,
@@ -622,7 +622,7 @@ async def detection_api(user=Depends(login_manager)):  # noqa: B008
 
 async def detection_fragment(user=Depends(login_manager)):  # noqa: B008
     """Return detection counts as an HTML fragment for Datastar to morph into #detections."""
-    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path)
+    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path, model_name=settings.yolo_model)
     text = _format_detection_counts(result.get("counts"))
     html = f'Detections: <span aria-live="polite">{text}</span>'
     return _fragment_response(html, selector="#detections", mode="inner")
