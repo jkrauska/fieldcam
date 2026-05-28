@@ -16,15 +16,24 @@ dependencies = [
     "uvicorn[standard]",
     "pillow",
     "ruff",
+    # YOLOv8 person/bird detection runs on a pre-exported ONNX model — no torch.
+    # onnxruntime ships cp311 manylinux aarch64 wheels and pulls numpy in.
+    "onnxruntime",
+    "numpy",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pre-commit",
 ]
-# YOLO person detection (count people in field image)
-yolo = [
-    "ultralytics>=8.0.0",
+# Tooling to regenerate app/models/yolov8n.onnx from the upstream .pt weights.
+# Heavy (torch), local/dev only — never installed into the runtime image:
+#   uv run --extra export python -c "from ultralytics import YOLO; \
+#     YOLO('yolov8n.pt').export(format='onnx', imgsz=640, opset=12)"
+export = [
+    "ultralytics==8.4.14",
+    "onnx",
+    "onnxslim",
 ]
 
 [tool.ruff]

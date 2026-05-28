@@ -80,8 +80,8 @@ class Settings(BaseSettings):
     jobs_db_path: str = "sqlite:///jobs/jobs.sqlite"
     # Path to field camera snapshot (cron/ffmpeg writes here; default /tmp so any user can read)
     field_image_path: str = "/tmp/field.jpg"
-    # YOLO model variant (e.g. yolov8n.pt, yolov8s.pt)
-    yolo_model: str = "models/yolov8n.pt"
+    # YOLOv8 ONNX model shipped in the image (regenerate via `uv run --extra export`)
+    yolo_model: str = "app/models/yolov8n.onnx"
 
     model_config = SettingsConfigDict(**_SETTINGS_KW)
 

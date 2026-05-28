@@ -21,13 +21,10 @@ WORKDIR /code
 # Copy dependency manifest (rebuilt when pyproject.toml changes)
 COPY pyproject.toml .
 
-# Install dependencies into system Python (no venv in container).
-# We intentionally install only the base dependencies and skip the optional
-# `yolo` extra (`ultralytics` -> torch / CUDA / cuDNN), which roughly triples
-# the image size and adds many minutes to the build. The app degrades
-# gracefully when ultralytics is missing (see app/yolo_check.py). To build a
-# YOLO-enabled image locally, change the line below to:
-#   uv pip install --no-cache -r pyproject.toml --extra yolo
+# Install runtime dependencies into system Python (no venv in container).
+# YOLO detection runs on onnxruntime (a base dependency) against the ONNX model
+# baked in below — torch / ultralytics are NOT installed here (export-only, see
+# pyproject.toml). This stage rebuilds only when pyproject.toml changes.
 ENV UV_SYSTEM_PYTHON=1
 RUN uv pip install --no-cache -r pyproject.toml
 
@@ -69,4 +66,9 @@ RUN echo "{\"git_commit\": \"${GIT_COMMIT}\", \"git_branch\": \"${GIT_BRANCH}\",
 #   The startup config dump (sensitive values redacted) is suppressed by
 #   default. To enable it for troubleshooting, run the container with
 #   `-e DEBUG=1` (or set DEBUG=1 in the bind-mounted .env).
+#
+#   YOLO detection runs on onnxruntime against app/models/yolov8n.onnx (baked
+#   into the image via `COPY ./app`), so there is no torch and no runtime model
+#   download. Keep runtime-written data (captures, logs) on a mounted volume so
+#   it doesn't bloat the container's writable layer.
 CMD ["fastapi", "run", "app/main.py", "--port", "9090"]
