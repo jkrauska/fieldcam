@@ -3,6 +3,7 @@
 import logging
 import os
 import subprocess
+import tempfile
 import threading
 
 import httpx
@@ -51,9 +52,13 @@ def input_cam_url() -> str:
 def snapshot_field_image():
     """Grab a JPEG snapshot from the Hikvision ISAPI endpoint (sub-stream, channel 102).
 
-    Raises RuntimeError when the camera is not fully configured. Surfacing this
-    as a real failure means APScheduler logs it as a job error (instead of the
-    misleading "executed successfully") and any direct caller can react.
+    Raises:
+        RuntimeError: when the camera is not configured, or when the HTTP
+            request / file write fails. Raising on failure is what makes
+            APScheduler log the job as failed (with traceback) instead of
+            the misleading "executed successfully" — otherwise the operator
+            sees a clean log while the UI is silently stuck on the
+            "Waiting for snapshot" placeholder because no file was written.
     """
     if not camera_configured():
         missing = ", ".join(missing_camera_fields())
@@ -61,21 +66,42 @@ def snapshot_field_image():
     url = f"http://{settings.camera_ip}/ISAPI/Streaming/channels/102/picture"
     auth = httpx.DigestAuth(settings.camera_user, settings.camera_pass)
     output = settings.field_image_path
-    tmp = output + ".tmp"
+
     try:
         resp = httpx.get(url, auth=auth, timeout=10)
         resp.raise_for_status()
-        with open(tmp, "wb") as f:
-            f.write(resp.content)
-        os.replace(tmp, output)
     except httpx.ConnectError as e:
-        logging.warning("Field snapshot connect error (%s): %s", settings.camera_ip, e)
-    except httpx.TimeoutException:
-        logging.warning("Field snapshot timed out connecting to %s", url)
+        raise RuntimeError(f"Field snapshot connect error to {settings.camera_ip}: {e}") from e
+    except httpx.TimeoutException as e:
+        raise RuntimeError(f"Field snapshot timed out connecting to {url}") from e
     except httpx.HTTPStatusError as e:
-        logging.warning("Field snapshot HTTP error from %s: %s", url, e)
-    except Exception as e:
-        logging.warning("Field snapshot failed (%s): %s", settings.camera_ip, e)
+        raise RuntimeError(f"Field snapshot HTTP {e.response.status_code} from {url}") from e
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"Field snapshot HTTP error from {url}: {e}") from e
+
+    # Per-call random suffix avoids two concurrent snapshot jobs racing on the
+    # same .tmp path (see PLANS-2026-05 §3.4).
+    tmp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=os.path.dirname(output) or ".",
+            prefix=os.path.basename(output) + ".",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp.write(resp.content)
+            tmp_path = tmp.name
+        os.replace(tmp_path, output)
+        tmp_path = None
+    except OSError as e:
+        raise RuntimeError(f"Field snapshot write failed ({output}): {e}") from e
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 def _build_output_url(key: str, destination: str = "gamechanger", custom_url: str = "") -> str:

@@ -237,9 +237,18 @@ This watches `app/` for changes and rebuilds the image after a 60s debounce. Res
 
 #### A note on YOLO detection
 
-Detection runs on **ONNX Runtime** against a pre-exported model committed at `cam-app/app/models/yolov8n.onnx` — no `torch` or `ultralytics` in the image, no model download at runtime. This keeps the image small and fast on a Raspberry Pi (ONNX is ~2× faster than PyTorch there). The app still degrades gracefully: if `onnxruntime` or the model file is missing, detection routes return an error and the rest of the UI keeps working.
+Detection runs on **ONNX Runtime** against pre-exported models committed under `cam-app/app/models/` — no `torch` or `ultralytics` in the image, no model download at runtime. This keeps the image small and fast on a Raspberry Pi (ONNX is ~2× faster than PyTorch there). The app still degrades gracefully: if `onnxruntime` or the model file is missing, detection routes return an error and the rest of the UI keeps working.
 
-To regenerate the model (e.g. to use `yolov8s` or a newer release), use the `export` extra — it pulls in `ultralytics` + `torch` locally only:
+Two models ship in the image; select via the `YOLO_MODEL` setting (env var or settings page):
+
+| Model | `YOLO_MODEL` value | Notes |
+|-------|--------------------|-------|
+| Nano (default) | `app/models/yolov8n.onnx` | ~12 MB, fastest (~130 ms/img on Pi 5) |
+| Medium | `app/models/yolov8m.onnx` | ~50 MB, more accurate at distance, ~3–4× slower |
+
+`YOLO_MODEL` must point at an `.onnx` file — a stale `.pt` value (from the old torch path) will return a clear error.
+
+To regenerate or add a model (e.g. `yolov8s`), use the `export` extra — it pulls in `ultralytics` + `torch` locally only:
 
 ```bash
 cd cam-app

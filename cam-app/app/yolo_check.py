@@ -120,7 +120,13 @@ def _get_session(model_name: str):
     if model_name not in _session_cache:
         import onnxruntime as ort
 
-        _session_cache[model_name] = ort.InferenceSession(model_name, providers=["CPUExecutionProvider"])
+        # Errors-only: silence the GPU device-discovery warnings emitted on
+        # boards (e.g. Raspberry Pi) that expose a DRM node with no usable
+        # inference GPU. We always run on CPU.
+        ort.set_default_logger_severity(3)
+        opts = ort.SessionOptions()
+        opts.log_severity_level = 3
+        _session_cache[model_name] = ort.InferenceSession(model_name, sess_options=opts, providers=["CPUExecutionProvider"])
     return _session_cache[model_name]
 
 
@@ -233,6 +239,16 @@ def detect_objects(
             "image_path": str(path),
             "model": model_name,
             "error": f"Model file not found: {model_name}",
+        }
+
+    if not model_name.lower().endswith(".onnx"):
+        # Most common cause: a stale YOLO_MODEL pointing at a torch .pt checkpoint.
+        return {
+            "counts": None,
+            "total": None,
+            "image_path": str(path),
+            "model": model_name,
+            "error": (f"Expected an ONNX model but got '{model_name}'. Set YOLO_MODEL to an .onnx file (default: {DEFAULT_MODEL})."),
         }
 
     try:
