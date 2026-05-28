@@ -131,7 +131,7 @@ def start_cleanup_task():
 
     Always-on tasks (do not require camera credentials):
       - stale-stream cleanup
-      - metric sampling (CPU temp + cached YOLO counts)
+      - metric sampling (CPU temp + a fresh YOLO detection + camera ping)
       - metric retention pruning
 
     Camera-dependent tasks (only scheduled when camera credentials are set):

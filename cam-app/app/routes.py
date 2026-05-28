@@ -260,6 +260,12 @@ def _refresh_detection_cache():
     try:
         result = detect_objects(image_path=settings.field_image_path, model_name=settings.yolo_model)
         counts = result.get("counts")
+        # detect_objects swallows its own failures and returns an error string
+        # rather than raising. Surface it here so a misconfigured YOLO_MODEL,
+        # missing model file, or absent onnxruntime shows up in the logs
+        # instead of silently rendering "—" in the UI and None in metrics.
+        if counts is None and result.get("error"):
+            logging.warning("Detection refresh produced no counts (model=%s): %s", settings.yolo_model, result["error"])
         _detection_cache["text"] = _format_detection_counts(counts)
         # Keep the raw counts dict so metrics.sample_metrics() can persist them.
         _detection_cache["counts"] = counts if isinstance(counts, dict) else None
@@ -605,7 +611,7 @@ async def detection_api(user=Depends(login_manager)):  # noqa: B008
 
     Returns JSON with counts per class, total, details, etc.
     """
-    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path)
+    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path, model_name=settings.yolo_model)
     if result.get("error") and result.get("counts") is None:
         raise HTTPException(
             status_code=503 if "not installed" in result.get("error", "") else 404,
@@ -616,7 +622,7 @@ async def detection_api(user=Depends(login_manager)):  # noqa: B008
 
 async def detection_fragment(user=Depends(login_manager)):  # noqa: B008
     """Return detection counts as an HTML fragment for Datastar to morph into #detections."""
-    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path)
+    result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path, model_name=settings.yolo_model)
     text = _format_detection_counts(result.get("counts"))
     html = f'Detections: <span aria-live="polite">{text}</span>'
     return _fragment_response(html, selector="#detections", mode="inner")
@@ -926,6 +932,22 @@ async def settings_fragment(request: Request, user=Depends(login_manager)):  # n
     return _fragment_response(html, selector="#settings-modal-body", mode="inner")
 
 
+def _validate_settings(env_values: dict[str, str]) -> str | None:
+    """Return a human-readable error if any setting is invalid, else None.
+
+    Currently guards YOLO_MODEL: detection runs on ONNX Runtime, so the value
+    must be an existing .onnx file. This stops a stale torch .pt path (which
+    silently zeroes out detections and metrics) from being saved.
+    """
+    model = (env_values.get("YOLO_MODEL") or "").strip()
+    if model:
+        if not model.lower().endswith(".onnx"):
+            return f"YOLO model must be an .onnx file (got '{model}'). Try app/models/yolov8n.onnx or app/models/yolov8m.onnx."
+        if not Path(model).is_file():
+            return f"YOLO model file not found: '{model}'. Use a path that exists in the container, e.g. app/models/yolov8n.onnx."
+    return None
+
+
 async def save_settings(request: Request, user=Depends(login_manager)):  # noqa: B008
     """Save settings to .env and restart the application (admin only)."""
     _require_admin(user)
@@ -938,6 +960,13 @@ async def save_settings(request: Request, user=Depends(login_manager)):  # noqa:
         form_val = form.get(key)
         if form_val is not None:
             env_values[key] = form_val
+
+    # Reject invalid values before persisting / restarting. Keeps the modal open
+    # with an error toast instead of saving a setting that silently breaks the app.
+    validation_error = _validate_settings(env_values)
+    if validation_error:
+        logging.warning("Settings save rejected: %s", validation_error)
+        return DatastarResponse([_make_toast_event(validation_error, "bg-danger")])
 
     _write_env_values(env_values)
     logging.info("Settings saved to .env at %s — scheduling process restart", _ENV_FILE)

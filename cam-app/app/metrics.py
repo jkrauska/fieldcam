@@ -77,11 +77,28 @@ def _ping_camera_ms(timeout_s: float = 2.0) -> float | None:
         return None
 
 
+def _refresh_detection() -> None:
+    """Run a fresh YOLO detection so sampled counts aren't stale.
+
+    Delegates to routes._refresh_detection_cache so the persisted metric and
+    the UI text share one code path / cache, and so the metric no longer
+    depends on the boot warm-up or someone viewing a page. Best-effort: a
+    detection failure must not stop CPU-temp / ping samples from recording
+    (routes._refresh_detection_cache already logs the underlying error).
+    """
+    try:
+        from . import routes
+
+        routes._refresh_detection_cache()
+    except Exception:
+        logging.exception("sample_metrics: detection refresh failed")
+
+
 def _read_detection_counts() -> tuple[int | None, int | None, int | None]:
     """Read the last-known YOLO counts from the in-memory cache in routes.py.
 
     Returns (person_count, bird_count, total_count). Any value may be None if
-    the cache hasn't been populated yet (e.g. immediately after startup).
+    detection has not produced counts (e.g. a misconfigured model).
     """
     # Local import to avoid a circular import (routes.py -> metrics is fine,
     # but routes imports plenty itself).
@@ -109,6 +126,7 @@ def _read_detection_counts() -> tuple[int | None, int | None, int | None]:
 def sample_metrics() -> None:
     """Take one sample of CPU temp, detection counts, and camera ping; persist it."""
     cpu_temp = _read_cpu_temp_c()
+    _refresh_detection()
     person, bird, total = _read_detection_counts()
     camera_ping_ms = _ping_camera_ms()
 
