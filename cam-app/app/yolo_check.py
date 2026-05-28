@@ -248,10 +248,7 @@ def detect_objects(
             "total": None,
             "image_path": str(path),
             "model": model_name,
-            "error": (
-                f"Expected an ONNX model but got '{model_name}'. "
-                f"Set YOLO_MODEL to an .onnx file (default: {DEFAULT_MODEL})."
-            ),
+            "error": (f"Expected an ONNX model but got '{model_name}'. Set YOLO_MODEL to an .onnx file (default: {DEFAULT_MODEL})."),
         }
 
     try:
