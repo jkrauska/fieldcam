@@ -235,9 +235,17 @@ cd cam-app
 
 This watches `app/` for changes and rebuilds the image after a 60s debounce. Restart the running container manually after each rebuild (`docker rm -f camapp && docker run ...`).
 
-#### A note on YOLO / `ultralytics`
+#### A note on YOLO detection
 
-The published image ships **without** the optional `yolo` extra (`ultralytics`, which pulls in `torch` and friends) — adding it roughly triples image size and balloons build time. The app handles this gracefully: detection routes return an `"ultralytics not installed"` error and the rest of the UI keeps working. For local YOLO experimentation use `uv sync --all-extras` and run the app with `uv run uvicorn ...` outside Docker. To build a YOLO-enabled container yourself, see the comment in `cam-app/Dockerfile`.
+Detection runs on **ONNX Runtime** against a pre-exported model committed at `cam-app/app/models/yolov8n.onnx` — no `torch` or `ultralytics` in the image, no model download at runtime. This keeps the image small and fast on a Raspberry Pi (ONNX is ~2× faster than PyTorch there). The app still degrades gracefully: if `onnxruntime` or the model file is missing, detection routes return an error and the rest of the UI keeps working.
+
+To regenerate the model (e.g. to use `yolov8s` or a newer release), use the `export` extra — it pulls in `ultralytics` + `torch` locally only:
+
+```bash
+cd cam-app
+uv run --extra export python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='onnx', imgsz=640, opset=12)"
+mv yolov8n.onnx app/models/yolov8n.onnx
+```
 
 ### Technology Stack
 
