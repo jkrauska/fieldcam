@@ -47,9 +47,6 @@ WORKDIR /code
 # Copy application code
 COPY ./app /code/app
 
-# Copy entrypoint (handles optional ultralytics auto-install on boot)
-COPY --chmod=755 ./entrypoint.sh /code/entrypoint.sh
-
 # Create version.json with build metadata
 RUN echo "{\"git_commit\": \"${GIT_COMMIT}\", \"git_branch\": \"${GIT_BRANCH}\", \"build_time\": \"${BUILD_TIME}\"}" > /code/app/version.json
 
@@ -74,4 +71,4 @@ RUN echo "{\"git_commit\": \"${GIT_COMMIT}\", \"git_branch\": \"${GIT_BRANCH}\",
 #   into the image via `COPY ./app`), so there is no torch and no runtime model
 #   download. Keep runtime-written data (captures, logs) on a mounted volume so
 #   it doesn't bloat the container's writable layer.
-CMD ["/code/entrypoint.sh"]
+CMD ["fastapi", "run", "app/main.py", "--port", "9090"]
