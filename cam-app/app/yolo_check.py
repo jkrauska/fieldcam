@@ -241,6 +241,19 @@ def detect_objects(
             "error": f"Model file not found: {model_name}",
         }
 
+    if not model_name.lower().endswith(".onnx"):
+        # Most common cause: a stale YOLO_MODEL pointing at a torch .pt checkpoint.
+        return {
+            "counts": None,
+            "total": None,
+            "image_path": str(path),
+            "model": model_name,
+            "error": (
+                f"Expected an ONNX model but got '{model_name}'. "
+                f"Set YOLO_MODEL to an .onnx file (default: {DEFAULT_MODEL})."
+            ),
+        }
+
     try:
         session = _get_session(model_name)
         cpu_before = time.process_time()
