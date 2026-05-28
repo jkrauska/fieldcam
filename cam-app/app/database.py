@@ -48,6 +48,7 @@ class MetricSample(Base):
     person_count = Column(Integer)  # nullable: detection not yet warm
     bird_count = Column(Integer)
     total_count = Column(Integer)
+    camera_ping_ms = Column(Float)  # nullable: None = camera unreachable / not configured
 
     __table_args__ = (Index("ix_metric_samples_ts", "ts"),)
 
@@ -77,6 +78,21 @@ def init_db():
             logging.info("Migration: added 'streamer_name' column to active_streams")
         except Exception:
             logging.warning("Migration failed: could not add 'streamer_name' column", exc_info=True)
+
+    # metric_samples migrations: add new columns to pre-existing databases.
+    try:
+        metric_cols = {c["name"] for c in inspect(engine).get_columns("metric_samples")}
+    except Exception:
+        metric_cols = set()
+    if metric_cols and "camera_ping_ms" not in metric_cols:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE metric_samples ADD COLUMN camera_ping_ms FLOAT"))
+                conn.commit()
+            logging.info("Migration: added 'camera_ping_ms' column to metric_samples")
+        except Exception:
+            logging.warning("Migration failed: could not add 'camera_ping_ms' column", exc_info=True)
+
     logging.info("Database initialized - active_streams table ready")
 
 

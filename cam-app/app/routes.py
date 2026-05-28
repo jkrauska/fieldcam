@@ -172,7 +172,7 @@ def serve_field_thumb():
     )
 
 
-_detection_cache: dict = {"text": "\u2014", "expires": 0.0}
+_detection_cache: dict = {"text": "\u2014", "counts": None, "expires": 0.0}
 _DETECTION_TTL = 60
 _detection_refresh_lock = threading.Lock()
 
@@ -181,7 +181,10 @@ def _refresh_detection_cache():
     """Run YOLO detection and update the cache (called from a background thread)."""
     try:
         result = detect_objects(image_path=settings.field_image_path, model_name=settings.yolo_model)
-        _detection_cache["text"] = _format_detection_counts(result.get("counts"))
+        counts = result.get("counts")
+        _detection_cache["text"] = _format_detection_counts(counts)
+        # Keep the raw counts dict so metrics.sample_metrics() can persist them.
+        _detection_cache["counts"] = counts if isinstance(counts, dict) else None
         _detection_cache["expires"] = time.time() + _DETECTION_TTL
     except Exception:
         logging.exception("Background detection refresh failed")
