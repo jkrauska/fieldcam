@@ -111,11 +111,81 @@ _PLACEHOLDER_SVG = (
     b"</svg>"
 )
 
+# How stale the field snapshot can be before we treat the camera as offline
+# and stamp the image with a warning overlay. 10 minutes matches the operator
+# expectation that a healthy capture pipeline writes the file every ~5 min.
+_OFFLINE_THRESHOLD_SECONDS = 10 * 60
+_OFFLINE_TEXT = "CAMERA IS OFFLINE"
+
+
+def _is_image_stale(file_path: Path) -> bool:
+    """Return True if the field snapshot is older than the offline threshold."""
+    try:
+        age = time.time() - file_path.stat().st_mtime
+    except OSError:
+        return False
+    return age > _OFFLINE_THRESHOLD_SECONDS
+
+
+def _render_offline_overlay(file_path: Path, *, max_width: int | None = None, quality: int = 85) -> bytes:
+    """Load `file_path`, draw the offline warning, and return JPEG bytes.
+
+    `max_width` (when set) downscales the image first; used by the thumbnail path.
+    """
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    with Image.open(file_path) as img:
+        img = img.convert("RGB")
+        if max_width is not None and img.width > max_width:
+            ratio = max_width / img.width
+            img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
+
+        draw = ImageDraw.Draw(img)
+        # Scale text roughly to image width so it stays legible on both the
+        # full-size snapshot (~1920px) and the small thumbnail (~200px).
+        font_size = max(14, int(img.width * 0.07))
+        try:
+            font = ImageFont.load_default(size=font_size)
+        except TypeError:
+            # Pillow < 10.1 doesn't accept `size=`; fall back to the bitmap default.
+            font = ImageFont.load_default()
+
+        bbox = draw.textbbox((0, 0), _OFFLINE_TEXT, font=font)
+        text_w = bbox[2] - bbox[0]
+        x = (img.width - text_w) // 2 - bbox[0]
+        y = max(int(img.height * 0.06), 8) - bbox[1]
+
+        stroke = max(2, font_size // 12)
+        draw.text(
+            (x, y),
+            _OFFLINE_TEXT,
+            font=font,
+            fill=(255, 32, 32),
+            stroke_width=stroke,
+            stroke_fill=(0, 0, 0),
+        )
+
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+        return buf.getvalue()
+
 
 def serve_field_image():
     """Serve the field camera image, falling back to a placeholder if missing/corrupt."""
     file_path = Path(settings.field_image_path)
     if file_path.is_file() and file_path.stat().st_size > 0:
+        if _is_image_stale(file_path):
+            try:
+                payload = _render_offline_overlay(file_path)
+                return Response(
+                    content=payload,
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"},
+                )
+            except Exception:
+                logging.exception("Failed to render offline overlay on field image")
         return FileResponse(
             str(file_path),
             media_type="image/jpeg",
@@ -127,8 +197,6 @@ def serve_field_image():
             media_type="image/jpeg",
             headers={"Cache-Control": "no-store, max-age=0"},
         )
-    from fastapi.responses import Response
-
     return Response(
         content=_PLACEHOLDER_SVG,
         media_type="image/svg+xml",
@@ -147,6 +215,16 @@ def serve_field_thumb():
 
     file_path = Path(settings.field_image_path)
     if file_path.is_file() and file_path.stat().st_size > 0:
+        if _is_image_stale(file_path):
+            try:
+                payload = _render_offline_overlay(file_path, max_width=_THUMB_WIDTH, quality=70)
+                return Response(
+                    content=payload,
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"},
+                )
+            except Exception:
+                logging.exception("Failed to render offline overlay on field thumbnail")
         with Image.open(file_path) as img:
             ratio = _THUMB_WIDTH / img.width
             thumb_height = int(img.height * ratio)
