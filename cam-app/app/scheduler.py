@@ -165,7 +165,14 @@ def start_cleanup_task():
             name="HIDDEN_snapshot_field",
             replace_existing=True,
         )
-        snapshot_field_image()
+        # Initial snapshot is best-effort: a transient camera outage shouldn't
+        # block app boot. The periodic job will retry every 60s and will now
+        # surface real failures via APScheduler's error log (instead of the
+        # misleading "executed successfully" we used to see).
+        try:
+            snapshot_field_image()
+        except Exception as exc:
+            logging.warning("Initial field snapshot failed (will retry every 60s): %s", exc)
         logging.info("Started field snapshot task (every 60s)")
 
         import threading
