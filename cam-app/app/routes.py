@@ -605,11 +605,12 @@ async def delete_history_entry(request: Request, user=Depends(login_manager)):  
     )
 
 
-async def detection_api(user=Depends(login_manager)):  # noqa: B008
+async def detection_api(pretty: bool = False, user=Depends(login_manager)):  # noqa: B008
     """
     Run YOLO on the current field image and return detected object counts.
 
-    Returns JSON with counts per class, total, details, etc.
+    Returns JSON with counts per class, total, details, etc. Pass `?pretty=true`
+    to get human-readable, indented JSON (e.g. when inspecting in a browser).
     """
     result = await asyncio.to_thread(detect_objects, image_path=settings.field_image_path, model_name=settings.yolo_model)
     if result.get("error") and result.get("counts") is None:
@@ -617,6 +618,8 @@ async def detection_api(user=Depends(login_manager)):  # noqa: B008
             status_code=503 if "not installed" in result.get("error", "") else 404,
             detail=result["error"],
         )
+    if pretty:
+        return Response(content=json.dumps(result, indent=2), media_type="application/json")
     return JSONResponse(content=result)
 
 
