@@ -191,7 +191,13 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         "-c:v",
         "copy",  # Video passthrough
         "-c:a",
-        "copy",  # Audio passthrough
+        "aac",  # Re-encode audio to AAC stereo
+        "-ac",
+        "2",  # 2 channels (stereo)
+        "-ar",
+        "44100",  # 44.1 kHz sample rate
+        "-b:a",
+        "128k",  # 128 kbps bitrate
         "-t",
         str(duration),  # Duration
         "-f",
