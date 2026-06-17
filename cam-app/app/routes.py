@@ -8,7 +8,7 @@ import signal
 import threading
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from datastar_py import ServerSentEventGenerator as SSE  # noqa: N814
@@ -39,6 +39,15 @@ def format_datetime(value, format="%Y-%m-%d %H:%M:%S"):
     if value is None:
         return ""
     return value.strftime(format)
+
+
+def utc_iso(value):
+    """Format a datetime as UTC ISO-8601 for browser local-time conversion."""
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=LOCAL_TZ)
+    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def clean_job_name(value):
@@ -96,6 +105,7 @@ def _uptime_text() -> str:
 # Set up the templates directory
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["datetime"] = format_datetime
+templates.env.filters["utc_iso"] = utc_iso
 templates.env.filters["clean_name"] = clean_job_name
 
 

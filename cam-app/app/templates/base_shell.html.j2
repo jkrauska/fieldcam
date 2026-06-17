@@ -147,14 +147,23 @@
             }).catch(function (err) { console.error("Failed to copy text: ", err); });
         }
 
+        function parseUtcInstant(raw) {
+            raw = raw.trim();
+            if (!raw || raw.indexOf(':') === -1) return null;
+            raw = raw.replace(/(\.\d{3})\d+/, '$1');
+            if (/[Zz]$/.test(raw) || /[+-]\d{2}:?\d{2}$/.test(raw)) {
+                var d = new Date(raw);
+                return isNaN(d) ? null : d;
+            }
+            var d = new Date(raw + 'Z');
+            return isNaN(d) ? null : d;
+        }
+
         function convertLocalTimes(root) {
             (root || document).querySelectorAll('.local-time').forEach(function (el) {
                 if (el.dataset.converted) return;
-                var raw = el.textContent.trim();
-                if (!raw || raw.indexOf(':') === -1) return;
-                raw = raw.replace(/(\.\d{3})\d+/, '$1');
-                var d = new Date(raw + (raw.endsWith('Z') ? '' : 'Z'));
-                if (isNaN(d)) return;
+                var d = parseUtcInstant(el.textContent);
+                if (!d) return;
                 el.textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
                 el.dataset.converted = '1';
             });
