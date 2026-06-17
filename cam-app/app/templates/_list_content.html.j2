@@ -99,7 +99,7 @@
                     {% else %}<span class="badge bg-success">GC</span>
                     {% endif %}
                 </td>
-                <td><span class="local-time">{{ job.next_run_time | datetime('%Y-%m-%dT%H:%M:%S') }}</span></td>
+                <td><span class="local-time">{{ job.next_run_time | utc_iso }}</span></td>
                 <td>
                     {% if job.kwargs.duration is defined %}
                     {% set jm = (job.kwargs.duration / 60) | round | int %}
