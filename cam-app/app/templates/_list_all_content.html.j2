@@ -43,7 +43,12 @@
                 <td>{{ (stream.duration / 60) | round | int }}</td>
                 <td>
                     {% if stream.stream_key %}
-                    <span class="d-inline-block" tabindex="0" role="button" aria-label="Stream key" title="{{ stream.stream_key }}">{{ stream.stream_key[13:][:6] }}...</span>
+                    <span class="d-inline-block stream-key" tabindex="0" role="button"
+                        aria-label="Copy stream key to clipboard"
+                        data-on:click="copyToClipboard('{{ stream.stream_key }}', el)"
+                        title="{{ stream.stream_key }}">
+                        {{ stream.stream_key[13:][:6] }}...
+                    </span>
                     {% else %}N/A{% endif %}
                 </td>
                 <td>{{ stream.pid }}</td>
