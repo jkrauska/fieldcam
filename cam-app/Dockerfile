@@ -1,5 +1,5 @@
 # Base OS stage: System dependencies (cached independently)
-FROM python:3.11-slim-bullseye AS base-os
+FROM python:3.11-slim-trixie AS base-os
 
 # Install FFmpeg and other system dependencies
 # This layer will be cached and reused unless the base image changes
