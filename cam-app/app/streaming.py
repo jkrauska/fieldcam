@@ -190,14 +190,14 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         input_cam,  # Input
         "-c:v",
         "copy",  # Video passthrough
+        "-af",
+        "pan=mono|c0=0.5*c0+0.5*c1",  # Downmix when mic is on one channel only
         "-c:a",
-        "aac",  # Re-encode audio to AAC stereo
-        "-ac",
-        "2",  # 2 channels (stereo)
+        "aac",
         "-ar",
-        "44100",  # 44.1 kHz sample rate
+        "48000",  # Match camera sample rate
         "-b:a",
-        "128k",  # 128 kbps bitrate
+        "64k",
         "-t",
         str(duration),  # Duration
         "-f",
