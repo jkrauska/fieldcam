@@ -494,8 +494,11 @@ async def submit_job(
         custom_url = custom_url.strip()
         if not custom_url:
             raise HTTPException(status_code=400, detail="Custom RTMP URL is required for custom destinations.")
-        if not custom_url.startswith(("rtmp://", "rtmps://")):
-            raise HTTPException(status_code=400, detail="Custom URL must start with rtmp:// or rtmps://")
+        if not custom_url.startswith(("rtmp://", "rtmps://", "srt://")):
+            raise HTTPException(
+                status_code=400,
+                detail="Custom URL must start with rtmp://, rtmps://, or srt://",
+            )
 
     try:
         date_obj = datetime.strptime(date, "%Y-%m-%d").date()
