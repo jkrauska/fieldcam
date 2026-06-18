@@ -111,7 +111,7 @@
                     <h5 class="modal-title"><i class="bi bi-clock-history"></i> Stream History</h5>
                     <button type="button" class="btn-close" aria-label="Close" data-on:click="$showHistoryModal = false"></button>
                 </div>
-                <div class="modal-body" id="history-modal-body" data-scope-children>
+                <div class="modal-body" id="history-modal-body">
                     <div class="text-center py-4"><div class="spinner-border text-secondary" role="status"><span class="visually-hidden">Loading…</span></div></div>
                 </div>
             </div>
@@ -175,7 +175,11 @@
                 if (!raw) return;
                 if (!el.dataset.utc && !looksLikeUtcIso(raw)) return;
                 var formatted = formatLocalTime(raw);
-                if (formatted) el.textContent = formatted;
+                // Skip no-op updates: assigning textContent fires our characterData
+                // observer and would otherwise loop forever on the main thread.
+                if (formatted && el.textContent.trim() !== formatted) {
+                    el.textContent = formatted;
+                }
             });
         }
 
@@ -193,18 +197,16 @@
             .observe(document.body, {
                 childList: true,
                 subtree: true,
-                characterData: true,
                 attributes: true,
                 attributeFilter: ['data-utc'],
             });
 
-        ['list-content', 'history-modal-body'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (!el) return;
-            el.addEventListener('datastar:scope-children', function () {
-                convertLocalTimes(el);
+        var listContent = document.getElementById('list-content');
+        if (listContent) {
+            listContent.addEventListener('datastar:scope-children', function () {
+                convertLocalTimes(listContent);
             });
-        });
+        }
 
         convertLocalTimes();
     </script>

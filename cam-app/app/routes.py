@@ -333,13 +333,21 @@ def _render_list_inner(request: Request) -> str:
     return templates.env.get_template("_list_content.html.j2").render(**ctx)
 
 
+def _render_list_actions() -> str:
+    """Render action buttons outside the SSE-patched list-content region."""
+    return templates.env.get_template("_list_actions.html.j2").render()
+
+
 def _render_list_content_fragment(request: Request):
     """Render the list-content fragment with the SSE-connected wrapper div.
 
     The wrapper div opens an SSE connection so all viewers get live updates.
+    Action buttons sit outside the wrapper so in-flight modal fetches are not
+    aborted when the list is morphed.
     """
     content = _render_list_inner(request)
-    return f'<div id="list-content" data-init="@get(\'/sse/list\')" data-scope-children>\n{content}\n</div>'
+    actions = _render_list_actions()
+    return f'<div id="list-content" data-init="@get(\'/sse/list\')" data-scope-children>\n{content}\n</div>\n{actions}'
 
 
 def _is_fragment_request(request: Request) -> bool:
