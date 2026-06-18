@@ -39,7 +39,7 @@
                     {% else %}<span class="badge bg-success">GC</span>
                     {% endif %}
                 </td>
-                <td><span class="local-time">{{ stream.start_time }}</span></td>
+                <td><span class="local-time" data-utc="{{ stream.start_time | utc_iso }}">{{ stream.start_time | utc_iso }}</span></td>
                 <td>{{ (stream.duration / 60) | round | int }}</td>
                 <td>
                     {% if stream.stream_key %}

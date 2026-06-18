@@ -42,12 +42,16 @@ def format_datetime(value, format="%Y-%m-%d %H:%M:%S"):
 
 
 def utc_iso(value):
-    """Format a datetime as UTC ISO-8601 for browser local-time conversion."""
-    if value is None:
+    """Format a datetime or ISO string as UTC ISO-8601 for browser local-time conversion."""
+    if value is None or value == "":
         return ""
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=LOCAL_TZ)
-    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if isinstance(value, str):
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    elif value.tzinfo is None:
+        dt = value.replace(tzinfo=LOCAL_TZ)
+    else:
+        dt = value
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def clean_job_name(value):
@@ -335,7 +339,7 @@ def _render_list_content_fragment(request: Request):
     The wrapper div opens an SSE connection so all viewers get live updates.
     """
     content = _render_list_inner(request)
-    return f'<div id="list-content" data-init="@get(\'/sse/list\')">\n{content}\n</div>'
+    return f'<div id="list-content" data-init="@get(\'/sse/list\')" data-scope-children>\n{content}\n</div>'
 
 
 def _is_fragment_request(request: Request) -> bool:
