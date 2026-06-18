@@ -34,22 +34,23 @@ Hikvision main stream often reports:
 Audio: aac (LC), 48000 Hz, stereo
 ```
 
-ffprobe may show **stereo** while the mic is effectively **mono on one channel** (signal on left, silence on right). Viewers then hear audio in **one ear / one speaker** only. Re-encoding with `-ac 2` does not fix that.
+ffprobe may show **stereo** while the mic is effectively **mono on one channel** (signal on left, hum on right). Viewers on direct RTSP stereo may hear clean audio in one ear; **mono downmix** (`0.5*L+0.5*R`) blends a ~94Hz hum from the right channel into GC output.
 
-**`cam-app/app/streaming.py`** downmixes L+R to mono before AAC encode:
+**`cam-app/app/streaming.py`** uses the **left channel only** before AAC encode:
 
 ```bash
--af "pan=mono|c0=0.5*c0+0.5*c1" -c:a aac -ar 48000 -b:a 64k
+-af "pan=mono|c0=c0" -c:a aac -ar 48000 -b:a 64k
 ```
 
-- Combines both channels so a single hot channel is heard on all speakers.
+- Avoids right-channel electrical hum common on Hikvision mic wiring.
 - Keeps **48 kHz** (camera native); do not force 44100.
-- Small CPU cost vs `-c:a copy`, but fixes the one-channel feed issue.
+- Small CPU cost vs `-c:a copy`, but required because copy writes 0 audio bytes to FLV.
 
 **Alternatives** (not used by default):
 
-- **`-c:a copy`** — no CPU, but preserves one silent channel if the camera sends it that way.
-- **Duplicate one channel** (when you know which side has audio): `-af "pan=stereo|c0=c0|c1=c0"`.
+- **Stereo downmix** — if both channels are clean: `-af "pan=mono|c0=0.5*c0+0.5*c1"`.
+- **Right channel only** — if mic is wired to channel 2: `-af "pan=mono|c0=c1"`.
+- **Highpass before downmix** — if hum persists and mic is on both channels: `-af "highpass=f=100,pan=mono|c0=0.5*c0+0.5*c1"`.
 
 Check the source with:
 
@@ -64,7 +65,7 @@ ffmpeg -hide_banner -loglevel error -progress pipe:1 -report \
   -rtsp_transport tcp \
   -i "rtsp://USER:PASS@CAMERA_IP:554/Streaming/channels/101/" \
   -c:v copy \
-  -af "pan=mono|c0=0.5*c0+0.5*c1" -c:a aac -ar 48000 -b:a 64k \
+  -af "pan=mono|c0=c0" -c:a aac -ar 48000 -b:a 64k \
   -f flv \
   "rtmp://DEST/STREAM_KEY"
 ```

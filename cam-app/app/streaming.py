@@ -190,8 +190,17 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         input_cam,  # Input
         "-c:v",
         "copy",  # Video passthrough
+        # Hikvision RTSP AAC cannot be copied into FLV (mux writes 0 audio bytes).
+        # Use left channel only: right channel often carries ~94Hz electrical hum;
+        # stereo downmix (0.5*L+0.5*R) blends that hum into mono GC output.
+        "-af",
+        "pan=mono|c0=c0",
         "-c:a",
-        "copy",  # Audio passthrough
+        "aac",
+        "-ar",
+        "48000",
+        "-b:a",
+        "64k",
         "-t",
         str(duration),  # Duration
         "-f",
