@@ -1,6 +1,7 @@
 """Job scheduling functionality for the fieldcam application."""
 
 import logging
+import threading
 from datetime import datetime, timedelta
 
 from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
@@ -165,21 +166,20 @@ def start_cleanup_task():
             name="HIDDEN_snapshot_field",
             replace_existing=True,
         )
-        # Initial snapshot is best-effort: a transient camera outage shouldn't
-        # block app boot. The periodic job will retry every 60s and will now
-        # surface real failures via APScheduler's error log (instead of the
-        # misleading "executed successfully" we used to see).
-        try:
-            snapshot_field_image()
-        except Exception as exc:
-            logging.warning("Initial field snapshot failed (will retry every 60s): %s", exc)
         logging.info("Started field snapshot task (every 60s)")
 
-        import threading
+        def _initial_snapshot():
+            try:
+                snapshot_field_image()
+            except Exception as exc:
+                logging.warning("Initial field snapshot failed (will retry every 60s): %s", exc)
+
+        threading.Thread(target=_initial_snapshot, daemon=True, name="initial-snapshot").start()
+        logging.info("Kicked off background initial field snapshot")
 
         from .routes import _refresh_detection_cache
 
-        threading.Thread(target=_refresh_detection_cache, daemon=True).start()
+        threading.Thread(target=_refresh_detection_cache, daemon=True, name="detection-warmup").start()
         logging.info("Kicked off background detection cache warm-up")
     else:
         missing = ", ".join(missing_camera_fields())
