@@ -144,12 +144,3 @@
 {% else %}
 <div class="mt-4" id="streams-section"></div>
 {% endif %}
-
-<div class="d-flex container mt-5 justify-content-center gap-3">
-    <a href="#" class="btn btn-success btn-lg" style="padding: 20px 40px; font-size: 20px;" role="button" data-on:click="evt.preventDefault(); $showScheduleModal = true">
-        <i class="bi bi-plus-circle-fill" style="color: white; font-size: 1rem;"></i> Schedule Stream
-    </a>
-    <a href="#" class="btn btn-secondary btn-lg" style="padding: 20px 40px; font-size: 20px;" data-on:click="evt.preventDefault(); $showHistoryModal = true; @get('/fragment/history')">
-        <i class="bi bi-clock-history" style="color: white; font-size: 1rem;"></i> View History
-    </a>
-</div>
