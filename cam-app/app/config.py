@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     rtmp_gamechanger: str = "rtmps://601c62c19c9e.global-contribute.live-video.net:443/app"
     rtmp_youtube: str = "rtmp://a.rtmp.youtube.com/live2"
 
+    # FFmpeg stream encode options (space-separated args, inserted after -i).
+    # Tune via .env / settings UI without changing Python.
+    video_options: str = "-c:v copy"
+    audio_options: str = "-af pan=mono|c0=c0 -c:a aac -ar 48000 -b:a 64k"
+
     # Optional settings
     timezone: str = "America/Los_Angeles"
     token_expiry_minutes: int = 30

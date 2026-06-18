@@ -857,6 +857,8 @@ _SETTINGS_GROUPS = [
         [
             ("RTMP_GAMECHANGER", "RTMP GameChanger URL", "text"),
             ("RTMP_YOUTUBE", "RTMP YouTube URL", "text"),
+            ("VIDEO_OPTIONS", "FFmpeg video options (space-separated)", "text"),
+            ("AUDIO_OPTIONS", "FFmpeg audio options (space-separated)", "text"),
         ],
     ),
     (
