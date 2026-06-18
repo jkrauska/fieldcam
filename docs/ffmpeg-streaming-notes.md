@@ -36,11 +36,13 @@ Audio: aac (LC), 48000 Hz, stereo
 
 ffprobe may show **stereo** while the mic is effectively **mono on one channel** (signal on left, hum on right). Viewers on direct RTSP stereo may hear clean audio in one ear; **mono downmix** (`0.5*L+0.5*R`) blends a ~94Hz hum from the right channel into GC output.
 
-**`cam-app/app/streaming.py`** uses the **left channel only** before AAC encode:
+**Default `AUDIO_OPTIONS`** (left channel only before AAC encode):
 
 ```bash
--af "pan=mono|c0=c0" -c:a aac -ar 48000 -b:a 64k
+-af pan=mono|c0=c0 -c:a aac -ar 48000 -b:a 64k
 ```
+
+Override via `.env` or the admin settings UI — no Python change required.
 
 - Avoids right-channel electrical hum common on Hikvision mic wiring.
 - Keeps **48 kHz** (camera native); do not force 44100.
@@ -60,12 +62,14 @@ ffprobe -rtsp_transport tcp -i "rtsp://USER:PASS@CAMERA_IP:554/Streaming/channel
 
 ## Reference command (matches `stream_game`)
 
+Defaults come from `VIDEO_OPTIONS` and `AUDIO_OPTIONS` in `.env`:
+
 ```bash
 ffmpeg -hide_banner -loglevel error -progress pipe:1 -report \
   -rtsp_transport tcp \
   -i "rtsp://USER:PASS@CAMERA_IP:554/Streaming/channels/101/" \
-  -c:v copy \
-  -af "pan=mono|c0=c0" -c:a aac -ar 48000 -b:a 64k \
+  $VIDEO_OPTIONS \
+  $AUDIO_OPTIONS \
   -f flv \
   "rtmp://DEST/STREAM_KEY"
 ```

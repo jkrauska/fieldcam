@@ -2,6 +2,7 @@
 
 import logging
 import os
+import shlex
 import subprocess
 import tempfile
 import threading
@@ -104,6 +105,14 @@ def snapshot_field_image():
                 pass
 
 
+def _parse_ffmpeg_options(options: str) -> list[str]:
+    """Split env-configured ffmpeg option string into argv tokens."""
+    options = options.strip()
+    if not options:
+        return []
+    return shlex.split(options)
+
+
 def _build_output_url(key: str, destination: str = "gamechanger", custom_url: str = "") -> str:
     """Build the RTMP output URL for the given destination."""
     if destination == "custom" and custom_url:
@@ -188,19 +197,8 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         "tcp",  # RTSP Options
         "-i",
         input_cam,  # Input
-        "-c:v",
-        "copy",  # Video passthrough
-        # Hikvision RTSP AAC cannot be copied into FLV (mux writes 0 audio bytes).
-        # Use left channel only: right channel often carries ~94Hz electrical hum;
-        # stereo downmix (0.5*L+0.5*R) blends that hum into mono GC output.
-        "-af",
-        "pan=mono|c0=c0",
-        "-c:a",
-        "aac",
-        "-ar",
-        "48000",
-        "-b:a",
-        "64k",
+        *_parse_ffmpeg_options(settings.video_options),
+        *_parse_ffmpeg_options(settings.audio_options),
         "-t",
         str(duration),  # Duration
         "-f",
