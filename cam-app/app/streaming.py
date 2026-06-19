@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import tempfile
 import threading
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx
 
@@ -113,15 +114,27 @@ def _parse_ffmpeg_options(options: str) -> list[str]:
     return shlex.split(options)
 
 
+def _ensure_srt_latency(url: str, latency_ms: int) -> str:
+    """Append SRT latency (ms) to a caller URL if not already set."""
+    if latency_ms <= 0:
+        return url
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    if any(name.lower() == "latency" for name in query):
+        return url
+    query["latency"] = [str(latency_ms)]
+    return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+
+
 def _build_output_url(key: str, destination: str = "gamechanger", custom_url: str = "") -> str:
     """Build the output URL for the given destination."""
     if destination == "custom" and custom_url:
         custom_url = custom_url.rstrip("/")
         if custom_url.lower().startswith("srt://"):
-            if not key or "streamid=" in custom_url.lower():
-                return custom_url
-            sep = "&" if "?" in custom_url else "?"
-            return f"{custom_url}{sep}streamid={key}"
+            if key and "streamid=" not in custom_url.lower():
+                sep = "&" if "?" in custom_url else "?"
+                custom_url = f"{custom_url}{sep}streamid={key}"
+            return _ensure_srt_latency(custom_url, settings.srt_latency_ms)
         return f"{custom_url}/{key}"
     base = RTMP_BASES.get(destination, RTMP_BASES["gamechanger"])
     return f"{base}/{key}"
