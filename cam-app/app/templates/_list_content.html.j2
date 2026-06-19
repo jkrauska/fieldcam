@@ -32,11 +32,17 @@
         </thead>
         <tbody>
             {% for stream in active_streams %}
-            <tr class="table-success">
+            <tr class="{{ 'table-warning' if stream.status == 'stopping' else 'table-success' }}">
                 <td id="stream-status-{{ stream.job_name | replace(' ', '_') }}">
+                    {% if stream.status == 'stopping' %}
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-hourglass-split"></i> Stopping
+                    </span>
+                    {% else %}
                     <span class="badge bg-success">
                         <i class="bi bi-broadcast-pin"></i> LIVE
                     </span>
+                    {% endif %}
                 </td>
                 <td>
                     {{ stream.job_name | clean_name }}
@@ -67,14 +73,16 @@
                     {% endif %}
                 </td>
                 <td align="center">
+                    {% if stream.status != 'stopping' %}
                     <form onsubmit="event.preventDefault()">
                         <input type="hidden" name="name" value="{{ stream.job_name }}">
                         <button type="button" style="border: none; background: none; cursor: pointer;"
-                            data-on:click="@post('/cancel_stream', {contentType: 'form'})">
+                            data-on:click="if(confirm('Stop this live stream?')){@post('/cancel_stream', {contentType: 'form'})}">
                             <i class="bi bi-stop-circle-fill" style="font-size: 24px; color: red;"></i>
                             <span class="visually-hidden">Cancel Stream</span>
                         </button>
                     </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

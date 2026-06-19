@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.templating import Jinja2Templates
 
 from .config import _ENV_FILE, LOCAL_TZ, login_manager, settings
-from .database import delete_stream_by_id, get_active_streams, get_all_streams, hide_stream_by_id
+from .database import delete_stream_by_id, finalize_stopping_streams, get_active_streams, get_all_streams, hide_stream_by_id
 from .event_bus import get_list_version, get_stats_version, get_stream_stats, notify_list_changed
 from .scheduler import cancel_stream, get_scheduled_jobs, new_stream, remove_job
 from .yolo_check import detect_objects
@@ -790,13 +790,18 @@ def _format_elapsed_of_total(out_time: str, duration_secs: int) -> str:
 
 def _render_stream_health_patches(stats: dict[str, dict], active_streams) -> list[tuple[str, str, str]]:
     """Return list of (selector, html, mode) tuples for patching stream table cells."""
-    # Build a lookup of duration by job_name from active_streams
+    # Build lookups from active_streams
     durations = {}
+    statuses = {}
     for stream in active_streams:
         durations[stream.job_name] = stream.duration
+        statuses[stream.job_name] = stream.status
 
     patches = []
     for name, s in stats.items():
+        if statuses.get(name) == "stopping":
+            continue
+
         bitrate = _format_bitrate_short(s.get("bitrate", "N/A"))
         out_time = s.get("out_time", "00:00:00")
         duration = durations.get(name, 0)
@@ -825,6 +830,7 @@ async def sse_stream_health(request: Request, user=Depends(login_manager)):  # n
         last_send = time.time()
         try:
             while not _shutting_down and not await request.is_disconnected():
+                finalize_stopping_streams()
                 current_version = get_stats_version()
                 now = time.time()
 
