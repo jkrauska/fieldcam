@@ -31,23 +31,25 @@ RUN uv pip install --no-cache -r pyproject.toml
 # Runtime stage: Create minimal image
 FROM base-os
 
-# Build arguments for version information
-ARG GIT_COMMIT=unknown
-ARG GIT_BRANCH=unknown
-ARG BUILD_TIME=unknown
-
 # Copy installed Python packages from python-env stage
-# Rebuilds when pyproject.toml changes
+# Rebuilds when pyproject.toml changes (~200MB: onnxruntime, numpy, sqlalchemy, …)
 COPY --from=python-env /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=python-env /usr/local/bin /usr/local/bin
 
 # Set working directory
 WORKDIR /code
 
-# Copy application code
-COPY ./app /code/app
+# Copy app in separate layers so code edits don't invalidate the ONNX models layer.
+# models/ is ~112MB (yolov8m.onnx alone is ~100MB); default runtime uses yolov8n.onnx.
+COPY ./app/models /code/app/models
+COPY ./app/static /code/app/static
+COPY ./app/templates /code/app/templates
+COPY ./app/*.py /code/app/
 
-# Create version.json with build metadata
+# Build arguments only before the layer that uses them (keeps COPY layers cacheable).
+ARG GIT_COMMIT=unknown
+ARG GIT_BRANCH=unknown
+ARG BUILD_TIME=unknown
 RUN echo "{\"git_commit\": \"${GIT_COMMIT}\", \"git_branch\": \"${GIT_BRANCH}\", \"build_time\": \"${BUILD_TIME}\"}" > /code/app/version.json
 
 # Deployment notes:
