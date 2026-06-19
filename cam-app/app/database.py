@@ -29,6 +29,7 @@ class ActiveStream(Base):
     streamer_name = Column(String)  # Person operating the stream (optional contact info)
     status = Column(String, default="running")  # running, completed, cancelled, failed
     error_message = Column(Text)
+    hidden_from_history = Column(Integer, default=0)  # 1 = hidden from history UI
     created_at = Column(String, default=lambda: datetime.now(UTC).isoformat())
     updated_at = Column(String, default=lambda: datetime.now(UTC).isoformat())
 
@@ -78,6 +79,14 @@ def init_db():
             logging.info("Migration: added 'streamer_name' column to active_streams")
         except Exception:
             logging.warning("Migration failed: could not add 'streamer_name' column", exc_info=True)
+    if "hidden_from_history" not in columns:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE active_streams ADD COLUMN hidden_from_history INTEGER DEFAULT 0 NOT NULL"))
+                conn.commit()
+            logging.info("Migration: added 'hidden_from_history' column to active_streams")
+        except Exception:
+            logging.warning("Migration failed: could not add 'hidden_from_history' column", exc_info=True)
 
     # metric_samples migrations: add new columns to pre-existing databases.
     try:
@@ -155,7 +164,12 @@ def get_all_streams():
     """
     session = SessionLocal()
     try:
-        streams = session.query(ActiveStream).order_by(ActiveStream.start_time.desc()).all()
+        streams = (
+            session.query(ActiveStream)
+            .filter((ActiveStream.hidden_from_history == 0) | (ActiveStream.hidden_from_history.is_(None)))
+            .order_by(ActiveStream.start_time.desc())
+            .all()
+        )
         session.expunge_all()
         return streams
     finally:
@@ -231,6 +245,29 @@ def remove_stream(job_name: str):
     except Exception as e:
         session.rollback()
         logging.error(f"Error removing stream: {e}")
+        raise
+    finally:
+        session.close()
+
+
+def hide_stream_by_id(stream_id: int) -> bool:
+    """Mark a stream history entry as hidden (soft-remove from history UI).
+
+    Returns True if a row was updated, False if not found.
+    """
+    session = SessionLocal()
+    try:
+        stream = session.query(ActiveStream).filter(ActiveStream.id == stream_id).first()
+        if not stream:
+            return False
+        stream.hidden_from_history = 1
+        stream.updated_at = datetime.now(UTC).isoformat()
+        session.commit()
+        logging.info(f"Hidden stream history entry id={stream_id} ({stream.job_name})")
+        return True
+    except Exception as e:
+        session.rollback()
+        logging.error(f"Error hiding stream id={stream_id}: {e}")
         raise
     finally:
         session.close()

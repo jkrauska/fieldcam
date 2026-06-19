@@ -78,15 +78,20 @@ form .col-form-label { width: 8.5rem; flex: 0 0 auto; }
         <input type="text" class="form-control bg-light" value="rtmp://a.rtmp.youtube.com/live2" readonly>
     </div>
     <div class="mb-3" data-show="$addDest === 'custom'" style="display:none">
-        <label for="add-customUrl" class="form-label"><b>Custom RTMP URL:</b></label>
-        <input type="text" class="form-control" id="add-customUrl" name="customUrl" placeholder="rtmp://your-server/path"
-            pattern="rtmps?://.*" title="Must start with rtmp:// or rtmps://">
+        <label for="add-customUrl" class="form-label"><b>Custom Stream URL:</b></label>
+        <input type="text" class="form-control" id="add-customUrl" name="customUrl"
+            placeholder="rtmp://your-server/path or srt://host:port"
+            data-on:blur="validateCustomUrlInput(el)"
+            data-on:input="if(el.validationMessage) validateCustomUrlInput(el)">
+        <div class="form-text">RTMP/RTMPS ingest URL, or SRT caller URL (e.g. srt://192.168.1.10:9000)</div>
     </div>
     <div class="mb-3">
         <label for="add-streamKey" class="form-label"><b>Stream Key:</b></label>
         <input type="text" class="form-control" id="add-streamKey" name="streamKey" required
-            data-attr-placeholder="$addDest === 'youtube' ? 'as122-er2w-xxxx...' : 'sk_us-east-1_...'"
-            placeholder="sk_us-east-1_...">
+            data-attr-placeholder="$addDest === 'youtube' ? '2grb-me60-4194-d5at-0hg9' : 'sk_us-east-1_...'"
+            placeholder="sk_us-east-1_..."
+            data-on:blur="validateStreamKeyInput(el)"
+            data-on:input="if(el.validationMessage) validateStreamKeyInput(el)">
         <div class="form-text" data-show="$addDest === 'youtube'" style="display:none">
             Get your key from YouTube Studio &rarr; Go Live &rarr; Stream settings
         </div>
@@ -94,5 +99,5 @@ form .col-form-label { width: 8.5rem; flex: 0 0 auto; }
             <a href="https://teammanager.zendesk.com/hc/en-us/articles/360060555011-Live-Streaming-From-An-External-Camera">How to Get Your GC Stream Key</a>
         </div>
     </div>
-    <button type="button" class="btn btn-primary" data-on:click="if(el.closest('form').reportValidity()){@post('/submit', {contentType: 'form'}); $showScheduleModal = false}"><i class="bi bi-plus-circle-fill" style="color: white; font-size: 1rem;"></i> Submit This Stream</button>
+    <button type="button" class="btn btn-primary" data-on:click="if(prepareScheduleForm(el)){@post('/submit', {contentType: 'form'}); $showScheduleModal = false}"><i class="bi bi-plus-circle-fill" style="color: white; font-size: 1rem;"></i> Submit This Stream</button>
 </form>

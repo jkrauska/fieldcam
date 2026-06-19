@@ -114,11 +114,24 @@ def _parse_ffmpeg_options(options: str) -> list[str]:
 
 
 def _build_output_url(key: str, destination: str = "gamechanger", custom_url: str = "") -> str:
-    """Build the RTMP output URL for the given destination."""
+    """Build the output URL for the given destination."""
     if destination == "custom" and custom_url:
-        return f"{custom_url.rstrip('/')}/{key}"
+        custom_url = custom_url.rstrip("/")
+        if custom_url.lower().startswith("srt://"):
+            if not key or "streamid=" in custom_url.lower():
+                return custom_url
+            sep = "&" if "?" in custom_url else "?"
+            return f"{custom_url}{sep}streamid={key}"
+        return f"{custom_url}/{key}"
     base = RTMP_BASES.get(destination, RTMP_BASES["gamechanger"])
     return f"{base}/{key}"
+
+
+def _output_format(destination: str, custom_url: str = "") -> str:
+    """Return ffmpeg muxer format for the destination."""
+    if destination == "custom" and custom_url.lower().startswith("srt://"):
+        return "mpegts"
+    return "flv"
 
 
 def _parse_progress(block: dict[str, str]) -> dict:
@@ -159,7 +172,7 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         key: Stream key appended to the destination base URL
         name: Name of the stream for logging purposes
         destination: Target service — "gamechanger", "youtube", or "custom"
-        custom_url: Full RTMP base URL when destination is "custom"
+        custom_url: RTMP/RTMPS base URL or SRT caller URL when destination is "custom"
         streamer_name: Optional contact name for the person operating the stream
 
     Returns:
@@ -180,6 +193,7 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         logging.error("No stream key given")
         return
     output_url = _build_output_url(key, destination, custom_url)
+    output_format = _output_format(destination, custom_url)
 
     os.makedirs("logs", exist_ok=True)
     ffmpeg_env = os.environ.copy()
@@ -202,7 +216,7 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         "-t",
         str(duration),  # Duration
         "-f",
-        "flv",
+        output_format,
         output_url,
     ]
 
