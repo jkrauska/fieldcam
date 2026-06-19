@@ -115,14 +115,18 @@ def _parse_ffmpeg_options(options: str) -> list[str]:
 
 
 def _ensure_srt_latency(url: str, latency_ms: int) -> str:
-    """Append SRT latency (ms) to a caller URL if not already set."""
+    """Append SRT latency to a caller URL if not already set.
+
+    ``latency_ms`` is the human-facing value in milliseconds. FFmpeg's SRT
+    protocol option expects microseconds (see ffmpeg-protocols ``srt``).
+    """
     if latency_ms <= 0:
         return url
     parsed = urlparse(url)
     query = parse_qs(parsed.query, keep_blank_values=True)
     if any(name.lower() == "latency" for name in query):
         return url
-    query["latency"] = [str(latency_ms)]
+    query["latency"] = [str(latency_ms * 1000)]
     return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
 
 

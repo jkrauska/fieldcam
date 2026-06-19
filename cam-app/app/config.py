@@ -79,8 +79,8 @@ class Settings(BaseSettings):
     video_options: str = "-c:v copy"
     audio_options: str = "-af pan=mono|c0=c0 -c:a aac -ar 48000 -b:a 64k"
 
-    # SRT caller latency buffer (ms). FFmpeg/libsrt default is 120; applied to
-    # custom srt:// output URLs when latency= is not already in the URL.
+    # SRT caller latency buffer (ms). FFmpeg's srt:// latency= URL option uses
+    # microseconds; we convert when building output URLs. FFmpeg default is 120 ms.
     srt_latency_ms: int = 3000
 
     # Optional settings
