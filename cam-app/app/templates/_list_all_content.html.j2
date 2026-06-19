@@ -12,6 +12,7 @@
                 <th scope="col">Key</th>
                 <th scope="col">PID</th>
                 <th scope="col">Error</th>
+                <th scope="col" class="text-center" title="Hide from history"></th>
                 {% if is_admin %}<th scope="col"></th>{% endif %}
             </tr>
         </thead>
@@ -61,6 +62,17 @@
                     </span>
                     {% else %}-{% endif %}
                 </td>
+                <td align="center">
+                    <form onsubmit="event.preventDefault()">
+                        <input type="hidden" name="id" value="{{ stream.id }}">
+                        <button type="button" class="btn btn-sm btn-link text-muted p-0"
+                            title="Hide from history"
+                            aria-label="Hide from history"
+                            data-on:click="@post('/hide_history', {contentType: 'form'})">
+                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        </button>
+                    </form>
+                </td>
                 {% if is_admin %}
                 <td align="center">
                     <form onsubmit="event.preventDefault()">
@@ -76,7 +88,7 @@
             </tr>
             {% if stream.error_message %}
             <tr style="display:none">
-                <td colspan="{{ 10 if is_admin else 9 }}">
+                <td colspan="{{ 11 if is_admin else 10 }}">
                     <div class="alert alert-danger mb-0 py-2 px-3" style="font-size:0.85em">
                         <strong>Error:</strong> {{ stream.error_message }}
                     </div>

@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.templating import Jinja2Templates
 
 from .config import _ENV_FILE, LOCAL_TZ, login_manager, settings
-from .database import delete_stream_by_id, get_active_streams, get_all_streams
+from .database import delete_stream_by_id, get_active_streams, get_all_streams, hide_stream_by_id
 from .event_bus import get_list_version, get_stats_version, get_stream_stats, notify_list_changed
 from .scheduler import cancel_stream, get_scheduled_jobs, new_stream, remove_job
 from .yolo_check import detect_objects
@@ -601,6 +601,32 @@ async def history_fragment(request: Request, user=Depends(login_manager)):  # no
     _localize_stream_times(all_streams)
     html = _render_list_all_fragment(request, all_streams, settings.location, user=user)
     return _fragment_response(html, selector="#history-modal-body", mode="inner")
+
+
+async def hide_history_entry(request: Request, user=Depends(login_manager)):  # noqa: B008
+    """Hide a single stream history entry from the history UI (any logged-in user)."""
+    form = await request.form()
+    stream_id = form.get("id")
+    if not stream_id:
+        raise HTTPException(status_code=400, detail="Missing stream id")
+
+    try:
+        hidden = hide_stream_by_id(int(stream_id))
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail="Invalid stream id") from e
+
+    if not hidden:
+        raise HTTPException(status_code=404, detail="Stream entry not found")
+
+    all_streams = get_all_streams()
+    _localize_stream_times(all_streams)
+    html = _render_list_all_fragment(request, all_streams, settings.location, user=user)
+    return DatastarResponse(
+        [
+            SSE.patch_elements(html, selector="#history-modal-body", mode=ElementPatchMode.INNER),
+            _make_toast_event("History entry hidden"),
+        ]
+    )
 
 
 async def delete_history_entry(request: Request, user=Depends(login_manager)):  # noqa: B008
