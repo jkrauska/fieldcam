@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import httpx
 
 from .config import camera_configured, missing_camera_fields, settings
-from .database import add_active_stream, update_stream_status
+from .database import add_active_stream, get_active_streams, update_stream_status
 from .event_bus import clear_stream_stats, update_stream_stats
 
 RTMP_BASES = {
@@ -298,8 +298,12 @@ def stream_game(duration=(60 * 4), key="", name="", destination="gamechanger", c
         stderr_thread.join(timeout=5)
         return_code = process.poll()
 
-        # Update stream status based on return code
-        if return_code == 0:
+        # Update stream status based on return code (skip if user already stopped the stream)
+        stopping = any(s.job_name == name and s.status == "stopping" for s in get_active_streams())
+        if stopping:
+            update_stream_status(name, "cancelled")
+            logging.info(f"Stream {name} cancelled (user stop)")
+        elif return_code == 0:
             update_stream_status(name, "completed")
             logging.info(f"Stream {name} completed successfully")
         else:

@@ -27,7 +27,7 @@ class ActiveStream(Base):
     stream_key = Column(String)
     destination = Column(String, default="gamechanger")
     streamer_name = Column(String)  # Person operating the stream (optional contact info)
-    status = Column(String, default="running")  # running, completed, cancelled, failed
+    status = Column(String, default="running")  # running, stopping, pending, completed, cancelled, failed
     error_message = Column(Text)
     hidden_from_history = Column(Integer, default=0)  # 1 = hidden from history UI
     created_at = Column(String, default=lambda: datetime.now(UTC).isoformat())
@@ -143,11 +143,11 @@ def get_active_streams():
     Get all currently active or pending streams.
 
     Returns:
-        List of ActiveStream objects with status 'running' or 'pending'
+        List of ActiveStream objects with status 'running', 'stopping', or 'pending'
     """
     session = SessionLocal()
     try:
-        streams = session.query(ActiveStream).filter(ActiveStream.status.in_(["running", "pending"])).all()
+        streams = session.query(ActiveStream).filter(ActiveStream.status.in_(["running", "stopping", "pending"])).all()
         # Detach from session to avoid issues after session closes
         session.expunge_all()
         return streams
@@ -202,12 +202,18 @@ def update_stream_status(job_name: str, status: str, error_message: str = None):
 
     Args:
         job_name: Name of the stream job
-        status: New status (completed, failed, cancelled)
+        status: New status (completed, failed, cancelled, stopping)
         error_message: Optional error message if failed
     """
     session = SessionLocal()
     try:
-        stream = session.query(ActiveStream).filter(ActiveStream.job_name == job_name).first()
+        stream = (
+            session.query(ActiveStream)
+            .filter(ActiveStream.job_name == job_name)
+            .filter(ActiveStream.status.in_(["running", "pending", "stopping"]))
+            .order_by(ActiveStream.created_at.desc())
+            .first()
+        )
         if stream:
             stream.status = status
             stream.updated_at = datetime.now(UTC).isoformat()
@@ -295,6 +301,37 @@ def delete_stream_by_id(stream_id: int) -> bool:
         session.close()
 
 
+def finalize_stopping_streams():
+    """
+    Mark user-stopped streams as cancelled once their FFmpeg process has exited.
+
+    Returns:
+        True if any stream was finalized, False otherwise
+    """
+    session = SessionLocal()
+    try:
+        stopping_streams = session.query(ActiveStream).filter(ActiveStream.status == "stopping").all()
+        changed = False
+        for stream in stopping_streams:
+            try:
+                os.kill(stream.pid, 0)
+            except OSError:
+                stream.status = "cancelled"
+                stream.updated_at = datetime.now(UTC).isoformat()
+                changed = True
+                logging.info(f"Stream {stream.job_name} (PID {stream.pid}) stopped, marked cancelled")
+        if changed:
+            session.commit()
+            notify_list_changed()
+        return changed
+    except Exception as e:
+        session.rollback()
+        logging.error(f"Error finalizing stopping streams: {e}")
+        return False
+    finally:
+        session.close()
+
+
 def cleanup_stale_streams():
     """
     Check all running streams and update status if process is dead.
@@ -318,6 +355,7 @@ def cleanup_stale_streams():
                 logging.warning(f"Stream {stream.job_name} (PID {stream.pid}) found dead, marked as failed")
 
         session.commit()
+        finalize_stopping_streams()
         notify_list_changed()
     except Exception as e:
         session.rollback()
@@ -358,14 +396,14 @@ def cancel_active_stream(job_name: str):
         try:
             # Try to terminate the process gracefully first
             os.kill(stream.pid, signal.SIGTERM)
-            update_stream_status(job_name, "cancelled")
-            logging.info(f"Cancelled stream {job_name} (PID {stream.pid})")
+            update_stream_status(job_name, "stopping")
+            logging.info(f"Stopping stream {job_name} (PID {stream.pid})")
             return True
         except ProcessLookupError:
             # Process already dead
-            update_stream_status(job_name, "failed", "Process not found")
+            update_stream_status(job_name, "cancelled")
             logging.warning(f"Stream {job_name} process not found (PID {stream.pid})")
-            return False
+            return True
         except Exception as e:
             logging.error(f"Error cancelling stream {job_name}: {e}")
             return False
