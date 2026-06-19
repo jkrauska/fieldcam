@@ -896,6 +896,7 @@ _SETTINGS_GROUPS = [
             ("RTMP_YOUTUBE", "RTMP YouTube URL", "text"),
             ("VIDEO_OPTIONS", "FFmpeg video options (space-separated)", "text"),
             ("AUDIO_OPTIONS", "FFmpeg audio options (space-separated)", "text"),
+            ("SRT_LATENCY_MS", "SRT latency buffer (ms, custom SRT only)", "number"),
         ],
     ),
     (
